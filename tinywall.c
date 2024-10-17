@@ -1,9 +1,16 @@
 // tinywall.c
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/netfilter.h>
+#include <linux/netfilter_ipv4.h>
+#include <linux/ip.h>
+#include <linux/tcp.h>
+#include <linux/types.h>
 #include "tinywall.h"
 
-// MODULE_LICENSE("GPL");
-// MODULE_AUTHOR("sxk");
-// MODULE_DESCRIPTION("Custom Netfilter Firewall Module");
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("sxk");
+MODULE_DESCRIPTION("Custom Netfilter Firewall Module");
 
 // 初始化规则链表和锁
 struct tinywall_rule_table rule_list;
@@ -182,3 +189,7 @@ static void __exit firewall_exit(void)
 
 module_init(firewall_init);
 module_exit(firewall_exit);
+
+EXPORT_SYMBOL(tinywall_rules_list);
+EXPORT_SYMBOL(tinywall_rule_remove);
+EXPORT_SYMBOL(tinywall_rule_add);

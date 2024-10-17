@@ -7,6 +7,12 @@
         "tcp.h": "c",
         "spinlock.h": "c",
         "my_firewall.h": "c",
-        "skbuff.h": "c"
-    }
+        "skbuff.h": "c",
+        "tinywall.h": "c",
+        "list.h": "c",
+        "netlink.h": "c",
+        "rtnetlink.h": "c",
+        "types.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }

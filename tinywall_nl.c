@@ -74,6 +74,6 @@ static void __exit firewall_netlink_exit(void)
 module_init(firewall_netlink_init);
 module_exit(firewall_netlink_exit);
 
-// MODULE_LICENSE("GPL");
-// MODULE_AUTHOR("sxk");
-// MODULE_DESCRIPTION("Custom Netfilter Firewall Module with Netlink Interface");
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("sxk");
+MODULE_DESCRIPTION("Custom Netfilter Firewall Module with Netlink Interface");

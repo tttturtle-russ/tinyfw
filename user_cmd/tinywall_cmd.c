@@ -11,7 +11,7 @@
 #define MAX_PAYLOAD 1024
 
 // 假设 firewall_rule 结构体已经定义在 tinywall.h 中
-#include "../tinywall.h"
+#include "../public.h"
 
 void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr) {
     struct firewall_rule rule;
@@ -146,3 +146,7 @@ exit:
     free(nlh);
     return 0;
 }
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("sxk");
+MODULE_DESCRIPTION("Custom Netfilter Firewall Module");
