@@ -10,11 +10,11 @@
 #define NETLINK_USER 31
 #define MAX_PAYLOAD 1024
 
-// 假设 firewall_rule 结构体已经定义在 tinywall.h 中
+// 假设 firewall_rule_user 结构体已经定义在 tinywall.h 中
 #include "../public.h"
 
 void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr) {
-    struct firewall_rule rule;
+    struct firewall_rule_user rule;
     char src_ip[16], dst_ip[16];
     int src_port, dst_port, protocol;
 
@@ -35,7 +35,7 @@ void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr) 
     rule.dst_port = htons(dst_port);
     rule.protocol = protocol;
 
-    nlh->nlmsg_type = NLMSG_ADD_RULE;
+    nlh->nlmsg_type = TINYWALL_TYPE_ADD_RULE;
     memcpy(NLMSG_DATA(nlh), &rule, sizeof(rule));
 
     struct iovec iov = { .iov_base = (void *)nlh, .iov_len = nlh->nlmsg_len };
@@ -45,7 +45,7 @@ void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr) 
 }
 
 void rule_remove(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr) {
-    struct firewall_rule rule;
+    struct firewall_rule_user rule;
     char src_ip[16], dst_ip[16];
     int src_port, dst_port, protocol;
 
@@ -66,7 +66,7 @@ void rule_remove(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_add
     rule.dst_port = htons(dst_port);
     rule.protocol = protocol;
 
-    nlh->nlmsg_type = NLMSG_DEL_RULE;
+    nlh->nlmsg_type = TINYWALL_TYPE_DEL_RULE;
     memcpy(NLMSG_DATA(nlh), &rule, sizeof(rule));
 
     struct iovec iov = { .iov_base = (void *)nlh, .iov_len = nlh->nlmsg_len };
@@ -76,7 +76,7 @@ void rule_remove(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_add
 }
 
 void rules_list(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr) {
-    nlh->nlmsg_type = NLMSG_LIST_RULES;
+    nlh->nlmsg_type = TINYWALL_TYPE_LIST_RULES;
 
     struct iovec iov = { .iov_base = (void *)nlh, .iov_len = nlh->nlmsg_len };
     struct msghdr msg = { .msg_name = (void *)dest_addr, .msg_namelen = sizeof(*dest_addr), .msg_iov = &iov, .msg_iovlen = 1 };
@@ -97,6 +97,7 @@ int main() {
     sock_fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_USER);
     if (sock_fd < 0) {
         perror("socket");
+        printf("here!");
         exit(1);
     }
 
@@ -109,7 +110,7 @@ int main() {
 
     nlh = (struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
     memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
-    nlh->nlmsg_len = NLMSG_SPACE(sizeof(struct firewall_rule));
+    nlh->nlmsg_len = NLMSG_SPACE(sizeof(struct firewall_rule_user));
     nlh->nlmsg_pid = getpid();
     nlh->nlmsg_flags = 0;
 
@@ -146,7 +147,3 @@ exit:
     free(nlh);
     return 0;
 }
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("sxk");
-MODULE_DESCRIPTION("Custom Netfilter Firewall Module");

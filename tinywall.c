@@ -17,7 +17,7 @@ struct tinywall_rule_table rule_list;
 // spinlock_t rule_lock = __SPIN_LOCK_UNLOCKED(rule_lock);
 
 // 添加规则函数
-int tinywall_rule_add(firewall_rule *new_rule)
+int tinywall_rule_add(firewall_rule_user *new_rule)
 {
     if (!new_rule)
         return -ENOMEM;
@@ -30,10 +30,9 @@ int tinywall_rule_add(firewall_rule *new_rule)
     rule->dst_port = new_rule->dst_port;
     rule->protocol = new_rule->protocol;
 
-    // spin_lock(&rule_lock);
-    // 放弃自旋锁
     write_lock(&rule_list.lock);
     list_add(&rule->list, &rule_list.head);
+    rule_list.rule_count++;
     write_unlock(&rule_list.lock);
 
     printk(KERN_INFO MODULE_NAME ": Added rule: %pI4:%d -> %pI4:%d, proto: %u\n",
@@ -44,7 +43,7 @@ int tinywall_rule_add(firewall_rule *new_rule)
 }
 
 // 删除规则函数
-int tinywall_rule_remove(struct firewall_rule *rule_to_del)
+int tinywall_rule_remove(struct firewall_rule_user *rule_to_del)
 {
     struct firewall_rule *rule;
     int found = 0;
@@ -59,6 +58,7 @@ int tinywall_rule_remove(struct firewall_rule *rule_to_del)
             rule->protocol == rule_to_del->protocol)
         {
             list_del(&rule->list);
+            rule_list.rule_count--;
             kfree(rule);
             found = 1;
             printk(KERN_INFO MODULE_NAME ": Removed rule: %pI4:%d -> %pI4:%d, proto: %u\n",

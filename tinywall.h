@@ -12,6 +12,15 @@
 
 #define MODULE_NAME "tinywall"
 
+typedef struct firewall_rule
+{
+    __be32 src_ip;
+    __be32 dst_ip;
+    __be16 src_port;
+    __be16 dst_port;
+    __u8 protocol;
+    struct list_head list;
+} firewall_rule, *firewall_rule_ops;
 
 // 全局规则链表和锁
 struct tinywall_rule_table {
@@ -22,8 +31,8 @@ struct tinywall_rule_table {
 // spinlock_t rule_lock;
 
 // 函数声明
-int tinywall_rule_add( firewall_rule *new_rule);
-int tinywall_rule_remove( firewall_rule *rule_to_del);
+int tinywall_rule_add( firewall_rule_user *new_rule);
+int tinywall_rule_remove( firewall_rule_user *rule_to_del);
 void tinywall_rules_list(void);
 
 #endif // MY_FIREWALL_H

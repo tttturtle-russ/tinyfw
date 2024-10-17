@@ -13,20 +13,20 @@ struct sock *nl_sk = NULL;
 static void nl_recv_msg(struct sk_buff *skb)
 {
     struct nlmsghdr *nlh;
-    firewall_rule rule;
+    firewall_rule_user rule;
 
     nlh = nlmsg_hdr(skb);
     memcpy(&rule, nlmsg_data(nlh), sizeof(rule));
 
-    if (nlh->nlmsg_type == NLMSG_ADD_RULE)
+    if (nlh->nlmsg_type == TINYWALL_TYPE_ADD_RULE)
     {
         tinywall_rule_add(&rule);
     }
-    else if (nlh->nlmsg_type == NLMSG_DEL_RULE)
+    else if (nlh->nlmsg_type == TINYWALL_TYPE_DEL_RULE)
     {
         tinywall_rule_remove(&rule);
     }
-    else if (nlh->nlmsg_type == NLMSG_LIST_RULES)
+    else if (nlh->nlmsg_type == TINYWALL_TYPE_LIST_RULES)
     {
         tinywall_rules_list();
     }

@@ -5,7 +5,7 @@ obj-m += tinywall.o tinywall_nl.o
 
 # 用户程序编译命令
 USER_CMD = ./user_cmd/tinywall_cmd.c
-USER_BIN = ./tinywall_cmd
+USER_BIN = ./tinywall
 
 # 编译选项
 CFLAGS += -Wall
