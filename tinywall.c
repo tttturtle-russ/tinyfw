@@ -1,29 +1,33 @@
-// my_firewall.c
-#include "my_firewall.h"
+// tinywall.c
+#include "tinywall.h"
 
 // MODULE_LICENSE("GPL");
 // MODULE_AUTHOR("sxk");
 // MODULE_DESCRIPTION("Custom Netfilter Firewall Module");
 
 // 初始化规则链表和锁
-LIST_HEAD(rule_list);
-spinlock_t rule_lock = __SPIN_LOCK_UNLOCKED(rule_lock);
+struct tinywall_rule_table rule_list;
+// spinlock_t rule_lock = __SPIN_LOCK_UNLOCKED(rule_lock);
 
 // 添加规则函数
-int add_rule(__be32 src_ip, __be32 dst_ip, __be16 src_port, __be16 dst_port, __u8 protocol) {
-    struct firewall_rule *rule = kmalloc(sizeof(*rule), GFP_KERNEL);
+int tinywall_rule_add(firewall_rule *new_rule)
+{
+    if (!new_rule)
+        return -ENOMEM;
+    firewall_rule *rule = kmalloc(sizeof(*rule), GFP_KERNEL);
     if (!rule)
         return -ENOMEM;
-    
-    rule->src_ip = src_ip;
-    rule->dst_ip = dst_ip;
-    rule->src_port = src_port;
-    rule->dst_port = dst_port;
-    rule->protocol = protocol;
+    rule->src_ip = new_rule->src_ip;
+    rule->dst_ip = new_rule->dst_ip;
+    rule->src_port = new_rule->src_port;
+    rule->dst_port = new_rule->dst_port;
+    rule->protocol = new_rule->protocol;
 
-    spin_lock(&rule_lock);
-    list_add(&rule->list, &rule_list);
-    spin_unlock(&rule_lock);
+    // spin_lock(&rule_lock);
+    // 放弃自旋锁
+    write_lock(&rule_list.lock);
+    list_add(&rule->list, &rule_list.head);
+    write_unlock(&rule_list.lock);
 
     printk(KERN_INFO MODULE_NAME ": Added rule: %pI4:%d -> %pI4:%d, proto: %u\n",
            &rule->src_ip, ntohs(rule->src_port),
@@ -33,38 +37,57 @@ int add_rule(__be32 src_ip, __be32 dst_ip, __be16 src_port, __be16 dst_port, __u
 }
 
 // 删除规则函数
-int remove_rule(__be32 src_ip, __be32 dst_ip, __be16 src_port, __be16 dst_port, __u8 protocol) {
+int tinywall_rule_remove(struct firewall_rule *rule_to_del)
+{
     struct firewall_rule *rule;
     int found = 0;
 
-    spin_lock(&rule_lock);
-    list_for_each_entry(rule, &rule_list, list) {
-        if (rule->src_ip == src_ip &&
-            rule->dst_ip == dst_ip &&
-            rule->src_port == src_port &&
-            rule->dst_port == dst_port &&
-            rule->protocol == protocol) {
+    read_lock(&rule_list.lock);
+    list_for_each_entry(rule, &rule_list.head, list)
+    {
+        if (rule->src_ip == rule_to_del->src_ip &&
+            rule->dst_ip == rule_to_del->dst_ip &&
+            rule->src_port == rule_to_del->src_port &&
+            rule->dst_port == rule_to_del->dst_port &&
+            rule->protocol == rule_to_del->protocol)
+        {
             list_del(&rule->list);
             kfree(rule);
             found = 1;
             printk(KERN_INFO MODULE_NAME ": Removed rule: %pI4:%d -> %pI4:%d, proto: %u\n",
-                   &src_ip, ntohs(src_port),
-                   &dst_ip, ntohs(dst_port),
-                   protocol);
+                   &rule->src_ip, ntohs(rule->src_port),
+                   &rule->dst_ip, ntohs(rule->dst_port),
+                   rule->protocol);
             break;
         }
     }
-    spin_unlock(&rule_lock);
+    read_unlock(&rule_list.lock);
     return found ? 0 : -ENOENT;
+}
+
+void tinywall_rules_list(void)
+{
+    struct firewall_rule *rule;
+    write_lock(&rule_list.lock);
+    list_for_each_entry(rule, &rule_list.head, list)
+    {
+        printk(KERN_INFO MODULE_NAME ": Rule: %pI4:%d -> %pI4:%d, proto: %u\n",
+               &rule->src_ip, ntohs(rule->src_port),
+               &rule->dst_ip, ntohs(rule->dst_port),
+               rule->protocol);
+    }
+    write_unlock(&rule_list.lock);
+    return;
 }
 
 // Netfilter钩子函数
 static unsigned int firewall_hook(void *priv,
                                   struct sk_buff *skb,
-                                  const struct nf_hook_state *state) {
+                                  const struct nf_hook_state *state)
+{
     struct iphdr *ip_header;
     struct tcphdr *tcp_header;
-    struct firewall_rule *rule;
+    firewall_rule *rule;
     int match = 0;
 
     if (!skb)
@@ -83,24 +106,28 @@ static unsigned int firewall_hook(void *priv,
         return NF_ACCEPT;
 
     // 检查连接状态（示例：仅允许已建立的连接）
-    if (!(tcp_header->syn || tcp_header->fin || tcp_header->rst)) {
+    if (!(tcp_header->syn || tcp_header->fin || tcp_header->rst))
+    {
         // 这里可以结合连接跟踪进行更复杂的状态检查
     }
 
-    spin_lock(&rule_lock);
-    list_for_each_entry(rule, &rule_list, list) {
+    write_lock(&rule_list.lock);
+    list_for_each_entry(rule, &rule_list.head, list)
+    {
         if ((rule->src_ip == ip_header->saddr || rule->src_ip == 0) &&
             (rule->dst_ip == ip_header->daddr || rule->dst_ip == 0) &&
             (rule->src_port == tcp_header->source || rule->src_port == 0) &&
             (rule->dst_port == tcp_header->dest || rule->dst_port == 0) &&
-            (rule->protocol == ip_header->protocol || rule->protocol == 0)) {
+            (rule->protocol == ip_header->protocol || rule->protocol == 0))
+        {
             match = 1;
             break;
         }
     }
-    spin_unlock(&rule_lock);
+    write_unlock(&rule_list.lock);
 
-    if (match) {
+    if (match)
+    {
         printk(KERN_INFO MODULE_NAME ": Packet matched rule, dropping.\n");
         return NF_DROP;
     }
@@ -117,12 +144,14 @@ static struct nf_hook_ops firewall_nfho = {
 };
 
 // 模块初始化
-static int __init firewall_init(void) {
+static int __init firewall_init(void)
+{
     int ret;
 
     // 注册Netfilter钩子
     ret = nf_register_net_hook(&init_net, &firewall_nfho);
-    if (ret) {
+    if (ret)
+    {
         printk(KERN_ERR MODULE_NAME ": Failed to register nethook\n");
         return ret;
     }
@@ -132,25 +161,24 @@ static int __init firewall_init(void) {
 }
 
 // 模块退出
-static void __exit firewall_exit(void) {
+static void __exit firewall_exit(void)
+{
     struct firewall_rule *rule, *tmp;
 
     // 注销Netfilter钩子
     nf_unregister_net_hook(&init_net, &firewall_nfho);
 
     // 清空规则链表
-    spin_lock(&rule_lock);
-    list_for_each_entry_safe(rule, tmp, &rule_list, list) {
+    write_lock(&rule_list.lock);
+    list_for_each_entry_safe(rule, tmp, &rule_list.head, list)
+    {
         list_del(&rule->list);
         kfree(rule);
     }
-    spin_unlock(&rule_lock);
+    write_unlock(&rule_list.lock);
 
     printk(KERN_INFO MODULE_NAME ": Firewall module unloaded.\n");
 }
 
 module_init(firewall_init);
 module_exit(firewall_exit);
-
-
-

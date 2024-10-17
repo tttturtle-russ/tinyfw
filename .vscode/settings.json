@@ -5,6 +5,8 @@
         "module.h": "c",
         "netfilter_ipv4.h": "c",
         "tcp.h": "c",
-        "spinlock.h": "c"
+        "spinlock.h": "c",
+        "my_firewall.h": "c",
+        "skbuff.h": "c"
     }
 }
