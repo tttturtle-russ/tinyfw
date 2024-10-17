@@ -15,7 +15,7 @@
 
 #define NLMSG_ADD_RULE 1     // 添加规则
 #define NLMSG_DEL_RULE 2     // 删除规则    
-#define NLMSG_LIST_RULE 3     // 列出规则
+#define NLMSG_LIST_RULES 3     // 列出规则
 #define NLMSG_MAX_SIZE 1024
 
 // 定义过滤规则结构

@@ -26,7 +26,7 @@ static void nl_recv_msg(struct sk_buff *skb)
     {
         tinywall_rule_remove(&rule);
     }
-    else if (nlh->nlmsg_type == NLMSG_LIST_RULE)
+    else if (nlh->nlmsg_type == NLMSG_LIST_RULES)
     {
         tinywall_rules_list();
     }
