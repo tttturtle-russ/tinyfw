@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/src/linux-headers-5.15.0-119-generic/include",
+                "/usr/src/linux-headers-5.15.0-119-generic/include/linux",
+                "/usr/src/linux-headers-5.15.0-119-generic/arch/x86/include",
+                "/usr/src/linux-headers-5.15.0-119-generic/arch/x86/include/generated",
+                "/usr/src/linux-headers-5.15.0-119-generic/arch/x86/include/uapi",
+                "/usr/src/linux-headers-5.15.0-119-generic/include/uapi",
+                "/usr/src/linux-headers-5.15.0-119-generic/include/generated",
+                "/usr/src/linux-headers-5.15.0-119-generic/include/linux/netfilter"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}
