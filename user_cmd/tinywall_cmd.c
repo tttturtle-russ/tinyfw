@@ -97,7 +97,7 @@ int main() {
     sock_fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_USER);
     if (sock_fd < 0) {
         perror("socket");
-        printf("here!");
+        //printf("here!");
         exit(1);
     }
 

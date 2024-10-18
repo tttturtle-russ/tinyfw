@@ -8,13 +8,8 @@
 #include <linux/types.h>
 #include "tinywall.h"
 
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("sxk");
-MODULE_DESCRIPTION("Custom Netfilter Firewall Module");
-
 // 初始化规则链表和锁
 struct tinywall_rule_table rule_list;
-// spinlock_t rule_lock = __SPIN_LOCK_UNLOCKED(rule_lock);
 
 // 添加规则函数
 int tinywall_rule_add(firewall_rule_user *new_rule)
@@ -48,7 +43,7 @@ int tinywall_rule_remove(struct firewall_rule_user *rule_to_del)
     struct firewall_rule *rule;
     int found = 0;
 
-    read_lock(&rule_list.lock);
+    write_lock(&rule_list.lock);
     list_for_each_entry(rule, &rule_list.head, list)
     {
         if (rule->src_ip == rule_to_del->src_ip &&
@@ -68,14 +63,14 @@ int tinywall_rule_remove(struct firewall_rule_user *rule_to_del)
             break;
         }
     }
-    read_unlock(&rule_list.lock);
+    write_unlock(&rule_list.lock);
     return found ? 0 : -ENOENT;
 }
 
 void tinywall_rules_list(void)
 {
     struct firewall_rule *rule;
-    write_lock(&rule_list.lock);
+    read_lock(&rule_list.lock);
     list_for_each_entry(rule, &rule_list.head, list)
     {
         printk(KERN_INFO MODULE_NAME ": Rule: %pI4:%d -> %pI4:%d, proto: %u\n",
@@ -83,7 +78,7 @@ void tinywall_rules_list(void)
                &rule->dst_ip, ntohs(rule->dst_port),
                rule->protocol);
     }
-    write_unlock(&rule_list.lock);
+    read_unlock(&rule_list.lock);
     return;
 }
 
@@ -98,27 +93,39 @@ static unsigned int firewall_hook(void *priv,
     int match = 0;
 
     if (!skb)
+    {
+        printk("null skb");
         return NF_ACCEPT;
+    }
 
     ip_header = ip_hdr(skb);
     if (!ip_header)
+    {
+        printk("null ip_header");
         return NF_ACCEPT;
+    }
 
     // 只处理TCP协议
     if (ip_header->protocol != IPPROTO_TCP)
+    {
+        printk("not tcp");
         return NF_ACCEPT;
+    }
 
     tcp_header = tcp_hdr(skb);
     if (!tcp_header)
-        return NF_ACCEPT;
-
-    // 检查连接状态（示例：仅允许已建立的连接）
-    if (!(tcp_header->syn || tcp_header->fin || tcp_header->rst))
     {
-        // 这里可以结合连接跟踪进行更复杂的状态检查
+        printk("null tcp_header");
+        return NF_ACCEPT;
     }
 
-    write_lock(&rule_list.lock);
+    // // 检查连接状态（示例：仅允许已建立的连接）
+    // if (!(tcp_header->syn || tcp_header->fin || tcp_header->rst))
+    // {
+    //     // 这里可以结合连接跟踪进行更复杂的状态检查
+    // }
+
+    read_lock(&rule_list.lock);
     list_for_each_entry(rule, &rule_list.head, list)
     {
         if ((rule->src_ip == ip_header->saddr || rule->src_ip == 0) &&
@@ -131,7 +138,7 @@ static unsigned int firewall_hook(void *priv,
             break;
         }
     }
-    write_unlock(&rule_list.lock);
+    read_unlock(&rule_list.lock);
 
     if (match)
     {
@@ -154,7 +161,10 @@ static struct nf_hook_ops firewall_nfho = {
 static int __init firewall_init(void)
 {
     int ret;
-
+    // 初始化规则链表和锁
+    INIT_LIST_HEAD(&rule_list.head);
+    rwlock_init(&rule_list.lock);
+    rule_list.rule_count = 0;
     // 注册Netfilter钩子
     ret = nf_register_net_hook(&init_net, &firewall_nfho);
     if (ret)
@@ -193,3 +203,7 @@ module_exit(firewall_exit);
 EXPORT_SYMBOL(tinywall_rules_list);
 EXPORT_SYMBOL(tinywall_rule_remove);
 EXPORT_SYMBOL(tinywall_rule_add);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("sxk");
+MODULE_DESCRIPTION("Custom Netfilter Firewall Module");
