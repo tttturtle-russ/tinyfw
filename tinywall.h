@@ -32,7 +32,11 @@ struct tinywall_rule_table {
 
 // 函数声明
 int tinywall_rule_add( firewall_rule_user *new_rule);
-int tinywall_rule_remove( firewall_rule_user *rule_to_del);
+
+int tinywall_rule_remove(unsigned int rule_id);
+
 void tinywall_rules_list(void);
+
+void tinywall_rules_clear(void);
 
 #endif // MY_FIREWALL_H

@@ -38,48 +38,72 @@ int tinywall_rule_add(firewall_rule_user *new_rule)
 }
 
 // 删除规则函数
-int tinywall_rule_remove(struct firewall_rule_user *rule_to_del)
+int tinywall_rule_remove(unsigned int rule_id_to_del)
 {
     struct firewall_rule *rule;
-    int found = 0;
-
+    bool found = 0;
+    int rule_number = 0;
     write_lock(&rule_list.lock);
     list_for_each_entry(rule, &rule_list.head, list)
     {
-        if (rule->src_ip == rule_to_del->src_ip &&
-            rule->dst_ip == rule_to_del->dst_ip &&
-            rule->src_port == rule_to_del->src_port &&
-            rule->dst_port == rule_to_del->dst_port &&
-            rule->protocol == rule_to_del->protocol)
+        rule_number++;
+        if (rule_number == rule_id_to_del)
         {
             list_del(&rule->list);
-            rule_list.rule_count--;
+            printk(KERN_INFO MODULE_NAME ": Deleted rule %d\n", rule_number);
             kfree(rule);
             found = 1;
-            printk(KERN_INFO MODULE_NAME ": Removed rule: %pI4:%d -> %pI4:%d, proto: %u\n",
-                   &rule->src_ip, ntohs(rule->src_port),
-                   &rule->dst_ip, ntohs(rule->dst_port),
-                   rule->protocol);
             break;
         }
     }
     write_unlock(&rule_list.lock);
-    return found ? 0 : -ENOENT;
+    if(!found){
+        printk(KERN_ERR MODULE_NAME ": Rule %d not found\n", rule_id_to_del);
+        return -EINVAL;
+    }
+    return 0;
 }
 
 void tinywall_rules_list(void)
 {
     struct firewall_rule *rule;
+    bool has_rules = false;
+    int rule_number = 0;  // 用于记录规则的序号
+
     read_lock(&rule_list.lock);
+
+    // 遍历 rule_list
     list_for_each_entry(rule, &rule_list.head, list)
     {
-        printk(KERN_INFO MODULE_NAME ": Rule: %pI4:%d -> %pI4:%d, proto: %u\n",
+        has_rules = true;
+        rule_number++;
+        printk(KERN_INFO MODULE_NAME ": Rule %d: %pI4:%d -> %pI4:%d, proto: %u\n",
+               rule_number,
                &rule->src_ip, ntohs(rule->src_port),
                &rule->dst_ip, ntohs(rule->dst_port),
                rule->protocol);
     }
+
+    // 如果没有规则，输出 "NO RULES"
+    if (!has_rules) {
+        printk(KERN_INFO MODULE_NAME ": NO RULES\n");
+    }
+
     read_unlock(&rule_list.lock);
     return;
+}
+
+void tinywall_rules_clear(void)
+{
+    struct firewall_rule *rule, *tmp;
+
+    write_lock(&rule_list.lock);
+    list_for_each_entry_safe(rule, tmp, &rule_list.head, list)
+    {
+        list_del(&rule->list);
+        kfree(rule);
+    }
+    write_unlock(&rule_list.lock);
 }
 
 // Netfilter钩子函数
@@ -94,28 +118,26 @@ static unsigned int firewall_hook(void *priv,
 
     if (!skb)
     {
-        printk("null skb");
         return NF_ACCEPT;
     }
 
     ip_header = ip_hdr(skb);
     if (!ip_header)
     {
-        printk("null ip_header");
         return NF_ACCEPT;
     }
 
     // 只处理TCP协议
     if (ip_header->protocol != IPPROTO_TCP)
     {
-        printk("not tcp");
+        //printk("not tcp");
         return NF_ACCEPT;
     }
 
     tcp_header = tcp_hdr(skb);
     if (!tcp_header)
     {
-        printk("null tcp_header");
+        //printk("null tcp_header");
         return NF_ACCEPT;
     }
 
@@ -203,6 +225,7 @@ module_exit(firewall_exit);
 EXPORT_SYMBOL(tinywall_rules_list);
 EXPORT_SYMBOL(tinywall_rule_remove);
 EXPORT_SYMBOL(tinywall_rule_add);
+EXPORT_SYMBOL(tinywall_rules_clear);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("sxk");

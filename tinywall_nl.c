@@ -5,7 +5,6 @@
 #include <net/net_namespace.h>
 #include <net/sock.h>
 
-#define NETLINK_USER 31
 
 struct sock *nl_sk = NULL;
 
@@ -17,6 +16,7 @@ static void nl_recv_msg(struct sk_buff *skb)
 
     nlh = nlmsg_hdr(skb);
     rule = (struct firewall_rule_user *)nlmsg_data(nlh);
+    unsigned int rule_id_to_delete = nlh->nlmsg_flags;
 
     if (nlh->nlmsg_type == TINYWALL_TYPE_ADD_RULE)
     {
@@ -28,14 +28,16 @@ static void nl_recv_msg(struct sk_buff *skb)
     else if (nlh->nlmsg_type == TINYWALL_TYPE_DEL_RULE)
     {
         printk(KERN_INFO MODULE_NAME ": Received a rule to delete.\n");
-        printk(KERN_INFO MODULE_NAME ": Source IP: %pI4, Destination IP: %pI4, Source Port: %d, Destination Port: %d, Protocol: %u\n",
-               &rule->src_ip, &rule->dst_ip, ntohs(rule->src_port), ntohs(rule->dst_port), rule->protocol);
-        tinywall_rule_remove(rule);
+        printk(KERN_INFO MODULE_NAME ": delete the rule with ID: %d\n",rule_id_to_delete);
+        tinywall_rule_remove(rule_id_to_delete);
     }
     else if (nlh->nlmsg_type == TINYWALL_TYPE_LIST_RULES)
     {
         printk(KERN_INFO MODULE_NAME ": Received a request to list rules.\n");
         tinywall_rules_list();
+    }else if(nlh->nlmsg_type == TINYWALL_TYPE_CLEAR_RULES){
+        printk(KERN_INFO MODULE_NAME ": Received a request to clear rules.\n");
+        tinywall_rules_clear();
     }
     else
     {
