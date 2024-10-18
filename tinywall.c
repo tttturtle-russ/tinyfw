@@ -9,9 +9,24 @@
 #include "tinywall.h"
 
 // 初始化规则链表和锁
-struct tinywall_rule_table rule_list;
+struct tinywall_rule_table *rule_table = NULL;
+// 初始化连接表
+struct tinywall_conntable *conn_table = NULL;
 
-// 添加规则函数
+/* >-----------------规则表部分-----------------<*/
+/* RULE TABLE INIT FUNCTIONS */
+struct tinywall_rule_table *tinywall_rule_table_init(void)
+{
+    // 初始化规则链表和锁
+    rule_table = kmalloc(sizeof(struct tinywall_rule_table), GFP_KERNEL);
+    if (!rule_table)
+        return NULL;
+    INIT_LIST_HEAD(&rule_table->head);
+    rwlock_init(&rule_table->lock);
+    rule_table->rule_count = 0;
+    return rule_table;
+}
+
 int tinywall_rule_add(firewall_rule_user *new_rule)
 {
     if (!new_rule)
@@ -21,18 +36,22 @@ int tinywall_rule_add(firewall_rule_user *new_rule)
         return -ENOMEM;
     rule->src_ip = new_rule->src_ip;
     rule->dst_ip = new_rule->dst_ip;
-    rule->src_port = new_rule->src_port;
-    rule->dst_port = new_rule->dst_port;
+    rule->src_port_min = new_rule->src_port_min;
+    rule->src_port_max = new_rule->src_port_max;
+    rule->dst_port_min = new_rule->dst_port_min;
+    rule->dst_port_max = new_rule->dst_port_max;
     rule->protocol = new_rule->protocol;
 
-    write_lock(&rule_list.lock);
-    list_add(&rule->list, &rule_list.head);
-    rule_list.rule_count++;
-    write_unlock(&rule_list.lock);
+    write_lock(rule_table->lock);
+    list_add(&rule->list, rule_table->head);
+    rule_table->rule_count++;
+    write_unlock(rule_table->lock);
 
-    printk(KERN_INFO MODULE_NAME ": Added rule: %pI4:%d -> %pI4:%d, proto: %u\n",
-           &rule->src_ip, ntohs(rule->src_port),
-           &rule->dst_ip, ntohs(rule->dst_port),
+    printk(KERN_INFO MODULE_NAME ": Added rule: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u\n",
+           &rule->src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max),
+           &rule->smask,
+           &rule->dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max),
+           &rule->dmask,
            rule->protocol);
     return 0;
 }
@@ -43,8 +62,8 @@ int tinywall_rule_remove(unsigned int rule_id_to_del)
     struct firewall_rule *rule;
     bool found = 0;
     int rule_number = 0;
-    write_lock(&rule_list.lock);
-    list_for_each_entry(rule, &rule_list.head, list)
+    write_lock(rule_table->lock);
+    list_for_each_entry(rule, rule_table->head, list)
     {
         rule_number++;
         if (rule_number == rule_id_to_del)
@@ -56,8 +75,9 @@ int tinywall_rule_remove(unsigned int rule_id_to_del)
             break;
         }
     }
-    write_unlock(&rule_list.lock);
-    if(!found){
+    write_unlock(rule_table->lock);
+    if (!found)
+    {
         printk(KERN_ERR MODULE_NAME ": Rule %d not found\n", rule_id_to_del);
         return -EINVAL;
     }
@@ -68,28 +88,29 @@ void tinywall_rules_list(void)
 {
     struct firewall_rule *rule;
     bool has_rules = false;
-    int rule_number = 0;  // 用于记录规则的序号
+    int rule_number = 0; // 用于记录规则的序号
 
-    read_lock(&rule_list.lock);
+    read_lock(rule_table->lock);
 
-    // 遍历 rule_list
-    list_for_each_entry(rule, &rule_list.head, list)
+    // 遍历 rule_table
+    list_for_each_entry(rule, rule_table->head, list)
     {
         has_rules = true;
         rule_number++;
-        printk(KERN_INFO MODULE_NAME ": Rule %d: %pI4:%d -> %pI4:%d, proto: %u\n",
+        printk(KERN_INFO MODULE_NAME ": Rule %d: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u\n",
                rule_number,
-               &rule->src_ip, ntohs(rule->src_port),
-               &rule->dst_ip, ntohs(rule->dst_port),
+               &rule->src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max), rule->smask,
+               &rule->dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max), rule->dmask,
                rule->protocol);
     }
 
     // 如果没有规则，输出 "NO RULES"
-    if (!has_rules) {
+    if (!has_rules)
+    {
         printk(KERN_INFO MODULE_NAME ": NO RULES\n");
     }
 
-    read_unlock(&rule_list.lock);
+    read_unlock(rule_table->lock);
     return;
 }
 
@@ -97,16 +118,29 @@ void tinywall_rules_clear(void)
 {
     struct firewall_rule *rule, *tmp;
 
-    write_lock(&rule_list.lock);
-    list_for_each_entry_safe(rule, tmp, &rule_list.head, list)
+    write_lock(rule_table->lock);
+    list_for_each_entry_safe(rule, tmp, rule_table->head, list)
     {
         list_del(&rule->list);
         kfree(rule);
     }
-    write_unlock(&rule_list.lock);
+    write_unlock(rule_table->lock);
 }
 
-// Netfilter钩子函数
+/* >-----------------连接表部分-----------------<*/
+/* CONNTABLE INIT FUNCTIONS */
+struct tinywall_conntable *tinywall_conntable_init()
+{
+    struct tinywall_conntable *table = kvzalloc(sizeof(*table), GFP_KERNEL);
+    if (!table)
+        return NULL;
+
+    hash_init(table->hashtable);
+    rwlock_init(&table->lock);
+    return table;
+}
+
+/* >-----------------子模块部分-----------------<*/
 static unsigned int firewall_hook(void *priv,
                                   struct sk_buff *skb,
                                   const struct nf_hook_state *state)
@@ -130,37 +164,34 @@ static unsigned int firewall_hook(void *priv,
     // 只处理TCP协议
     if (ip_header->protocol != IPPROTO_TCP)
     {
-        //printk("not tcp");
+        // printk("not tcp");
         return NF_ACCEPT;
     }
 
     tcp_header = tcp_hdr(skb);
     if (!tcp_header)
     {
-        //printk("null tcp_header");
+        // printk("null tcp_header");
         return NF_ACCEPT;
     }
 
-    // // 检查连接状态（示例：仅允许已建立的连接）
-    // if (!(tcp_header->syn || tcp_header->fin || tcp_header->rst))
-    // {
-    //     // 这里可以结合连接跟踪进行更复杂的状态检查
-    // }
-
-    read_lock(&rule_list.lock);
-    list_for_each_entry(rule, &rule_list.head, list)
+    // 检测是否匹配上规则
+    read_lock(rule_table->lock);
+    list_for_each_entry(rule, rule_table->head, list)
     {
-        if ((rule->src_ip == ip_header->saddr || rule->src_ip == 0) &&
-            (rule->dst_ip == ip_header->daddr || rule->dst_ip == 0) &&
-            (rule->src_port == tcp_header->source || rule->src_port == 0) &&
-            (rule->dst_port == tcp_header->dest || rule->dst_port == 0) &&
+        if (((rule->src_ip == ip_header->saddr || rule->src_ip == 0) ||
+             (rule->src_ip & rule->smask) == (ip_header->saddr & rule->smask)) &&
+            ((rule->dst_ip == ip_header->daddr || rule->dst_ip == 0) ||
+             (rule->dst_ip & rule->dmask) == (ip_header->daddr & rule->dmask)) &&
+            (ntohs(tcp_header->source) >= rule->src_port_min && ntohs(tcp_header->source) <= rule->src_port_max) &&
+            (ntohs(tcp_header->dest) >= rule->dst_port_min && ntohs(tcp_header->dest) <= rule->dst_port_max) &&
             (rule->protocol == ip_header->protocol || rule->protocol == 0))
         {
             match = 1;
             break;
         }
     }
-    read_unlock(&rule_list.lock);
+    read_unlock(rule_table->lock);
 
     if (match)
     {
@@ -183,10 +214,12 @@ static struct nf_hook_ops firewall_nfho = {
 static int __init firewall_init(void)
 {
     int ret;
-    // 初始化规则链表和锁
-    INIT_LIST_HEAD(&rule_list.head);
-    rwlock_init(&rule_list.lock);
-    rule_list.rule_count = 0;
+
+    /* 初始化规则表 */
+    tinywall_rule_table_init();
+
+    /* 初始化连接表 */
+    tinywall_conntable_init();
     // 注册Netfilter钩子
     ret = nf_register_net_hook(&init_net, &firewall_nfho);
     if (ret)
@@ -208,13 +241,13 @@ static void __exit firewall_exit(void)
     nf_unregister_net_hook(&init_net, &firewall_nfho);
 
     // 清空规则链表
-    write_lock(&rule_list.lock);
-    list_for_each_entry_safe(rule, tmp, &rule_list.head, list)
+    write_lock(rule_table->lock);
+    list_for_each_entry_safe(rule, tmp, rule_table->head, list)
     {
         list_del(&rule->list);
         kfree(rule);
     }
-    write_unlock(&rule_list.lock);
+    write_unlock(rule_table->lock);
 
     printk(KERN_INFO MODULE_NAME ": Firewall module unloaded.\n");
 }
@@ -228,5 +261,5 @@ EXPORT_SYMBOL(tinywall_rule_add);
 EXPORT_SYMBOL(tinywall_rules_clear);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("sxk");
-MODULE_DESCRIPTION("Custom Netfilter Firewall Module");
+MODULE_AUTHOR("Sun Xiaokai suxiaokai34@gmail.com");
+MODULE_DESCRIPTION("A Tiny Netfilter Firewall Module");

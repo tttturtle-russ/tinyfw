@@ -16,23 +16,29 @@ void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr)
 {
     struct firewall_rule_user rule;
     char src_ip[16], dst_ip[16];
-    int src_port, dst_port, protocol;
+    int src_port_min, src_port_max, dst_port_min, dst_port_max, protocol;
 
     printf("Enter source IP: ");
     scanf("%s", src_ip);
     printf("Enter destination IP: ");
     scanf("%s", dst_ip);
-    printf("Enter source port: ");
-    scanf("%d", &src_port);
-    printf("Enter destination port: ");
-    scanf("%d", &dst_port);
+    printf("Enter min source port: ");
+    scanf("%d", &src_port_min);
+    printf("Enter max source port: ");
+    scanf("%d", &src_port_max);
+    printf("Enter min destination port: ");
+    scanf("%d", &dst_port_min);
+    printf("Enter max destination port: ");
+    scanf("%d", &dst_port_max);
     printf("Enter protocol (6 for TCP, 17 for UDP): ");
     scanf("%d", &protocol);
 
     rule.src_ip = inet_addr(src_ip);
     rule.dst_ip = inet_addr(dst_ip);
-    rule.src_port = htons(src_port);
-    rule.dst_port = htons(dst_port);
+    rule.src_port_min = htons(src_port_min);
+    rule.src_port_max = htons(src_port_max);
+    rule.dst_port_min = htons(dst_port_min);
+    rule.dst_port_max = htons(dst_port_max);
     rule.protocol = protocol;
 
     nlh->nlmsg_type = TINYWALL_TYPE_ADD_RULE;

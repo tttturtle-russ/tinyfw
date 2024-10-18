@@ -1,5 +1,6 @@
 #define NLMSG_MAX_SIZE 1024
 #define NETLINK_USER 31
+#define TINY_HASHTABLE_BITS (10)
 // 定义过滤规则结构
 
 
@@ -7,9 +8,14 @@
 typedef struct firewall_rule_user {
     __be32 src_ip;
     __be32 dst_ip;
-    __be16 src_port;
-    __be16 dst_port;
+    __be32 smask;
+    __be32 dmask;
+    __be16 src_port_min;
+    __be16 src_port_max;
+    __be16 dst_port_min;
+    __be16 dst_port_max;
     __u8 protocol;
+    __u8 action;
 } firewall_rule_user;
 
 //定义规则操作
