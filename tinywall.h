@@ -26,8 +26,10 @@ typedef struct firewall_rule
     __be16 dst_port_min;
     __be16 dst_port_max;
     __u8 protocol;
+    __u8 action;
+    __u8 logging;
     struct list_head list;
-} firewall_rule, *firewall_rule_ops;
+} firewall_rule;
 
 /* >-----------------conn entity-----------------<*/
 struct xwall_connection

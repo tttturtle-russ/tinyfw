@@ -5,6 +5,7 @@
 #include <linux/netfilter_ipv4.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
+#include <linux/udp.h>
 #include <linux/types.h>
 #include "tinywall.h"
 
@@ -14,7 +15,7 @@ struct tinywall_rule_table *rule_table = NULL;
 struct tinywall_conntable *conn_table = NULL;
 
 /* >-----------------规则表部分-----------------<*/
-/* RULE TABLE INIT FUNCTIONS */
+// RULE TABLE INIT FUNCTION
 struct tinywall_rule_table *tinywall_rule_table_init(void)
 {
     // 初始化规则链表和锁
@@ -27,6 +28,7 @@ struct tinywall_rule_table *tinywall_rule_table_init(void)
     return rule_table;
 }
 
+// RULE TABLE ADD FUNCTION
 int tinywall_rule_add(firewall_rule_user *new_rule)
 {
     if (!new_rule)
@@ -56,7 +58,7 @@ int tinywall_rule_add(firewall_rule_user *new_rule)
     return 0;
 }
 
-// 删除规则函数
+// RULE DEL FUNCTION
 int tinywall_rule_remove(unsigned int rule_id_to_del)
 {
     struct firewall_rule *rule;
@@ -84,6 +86,7 @@ int tinywall_rule_remove(unsigned int rule_id_to_del)
     return 0;
 }
 
+// RULE LIST FUNCTION
 void tinywall_rules_list(void)
 {
     struct firewall_rule *rule;
@@ -114,6 +117,7 @@ void tinywall_rules_list(void)
     return;
 }
 
+// RULE CLEAR FUNCTION
 void tinywall_rules_clear(void)
 {
     struct firewall_rule *rule, *tmp;
@@ -147,9 +151,12 @@ static unsigned int firewall_hook(void *priv,
 {
     struct iphdr *ip_header;
     struct tcphdr *tcp_header;
+    struct udphdr *udp_header;
+    struct icmphdr *icmp_header;
     firewall_rule *rule;
-    int match = 0;
+    int match = -1; // 匹配动作
 
+    /*空数据包或者空ip头*/
     if (!skb)
     {
         return NF_ACCEPT;
@@ -161,45 +168,130 @@ static unsigned int firewall_hook(void *priv,
         return NF_ACCEPT;
     }
 
-    // 只处理TCP协议
-    if (ip_header->protocol != IPPROTO_TCP)
+    // 处理ICMP协议
+    /*TODO_1:每一个有效ACCEPT都要在连接表中新建连接
+    TODO_2:根据rule.logging字段是否记录日志*/
+    if (ip_header->protocol == IPPROTO_ICMP)
     {
-        // printk("not tcp");
-        return NF_ACCEPT;
-    }
-
-    tcp_header = tcp_hdr(skb);
-    if (!tcp_header)
-    {
-        // printk("null tcp_header");
-        return NF_ACCEPT;
-    }
-
-    // 检测是否匹配上规则
-    read_lock(rule_table->lock);
-    list_for_each_entry(rule, rule_table->head, list)
-    {
-        if (((rule->src_ip == ip_header->saddr || rule->src_ip == 0) ||
-             (rule->src_ip & rule->smask) == (ip_header->saddr & rule->smask)) &&
-            ((rule->dst_ip == ip_header->daddr || rule->dst_ip == 0) ||
-             (rule->dst_ip & rule->dmask) == (ip_header->daddr & rule->dmask)) &&
-            (ntohs(tcp_header->source) >= rule->src_port_min && ntohs(tcp_header->source) <= rule->src_port_max) &&
-            (ntohs(tcp_header->dest) >= rule->dst_port_min && ntohs(tcp_header->dest) <= rule->dst_port_max) &&
-            (rule->protocol == ip_header->protocol || rule->protocol == 0))
+        icmp_header = (struct icmphdr *)((unsigned char *)ip_header + (ip_header->ihl * 4));
+        if (!icmp_header)
         {
-            match = 1;
-            break;
+            // printk("null icmp_header");
+            return NF_ACCEPT;
+        }
+        // 检测是否匹配上规则
+        read_lock(rule_table->lock);
+        list_for_each_entry(rule, rule_table->head, list)
+        {
+            if (((rule->src_ip == ip_header->saddr || rule->src_ip == 0) ||
+                 (rule->src_ip & rule->smask) == (ip_header->saddr & rule->smask)) &&
+                ((rule->dst_ip == ip_header->daddr || rule->dst_ip == 0) ||
+                 (rule->dst_ip & rule->dmask) == (ip_header->daddr & rule->dmask)) &&
+                (rule->protocol == ip_header->protocol || rule->protocol == 0))
+            {
+                match = rule->action;
+                break;
+            }
+        }
+        read_unlock(rule_table->lock);
+
+        if (match == NF_ACCEPT)
+        {
+            printk(KERN_INFO MODULE_NAME ": Packet matched rule, rule's action is NF_ACCEPT.\n");
+            return NF_ACCEPT;
+        }
+        else if (match == NF_DROP)
+        {
+            printk(KERN_INFO MODULE_NAME ": Packet matched rule, rule's action is NF_DROP.\n");
+            return NF_DROP;
         }
     }
-    read_unlock(rule_table->lock);
 
-    if (match)
+    // 处理TCP协议
+    /*TODO_1:每一个有效ACCEPT都要在连接表中新建连接
+    TODO_2:根据rule.logging字段是否记录日志*/
+    if (ip_header->protocol == IPPROTO_TCP)
     {
-        printk(KERN_INFO MODULE_NAME ": Packet matched rule, dropping.\n");
-        return NF_DROP;
+        tcp_header = tcp_hdr(skb);
+        if (!tcp_header)
+        {
+            printk(KERN_ERR MODULE_NAME ": TCP header is NULL\n");
+            return NF_ACCEPT;
+        }
+        // 检测是否匹配上规则
+        read_lock(&rule_table->lock);
+        list_for_each_entry(rule, rule_table->head, list)
+        {
+            if (((rule->src_ip == ip_header->saddr || rule->src_ip == 0) ||
+                 (rule->src_ip & rule->smask) == (ip_header->saddr & rule->smask)) &&
+                ((rule->dst_ip == ip_header->daddr || rule->dst_ip == 0) ||
+                 (rule->dst_ip & rule->dmask) == (ip_header->daddr & rule->dmask)) &&
+                (ntohs(tcp_header->source) >= rule->src_port_min && ntohs(tcp_header->source) <= rule->src_port_max) &&
+                (ntohs(tcp_header->dest) >= rule->dst_port_min && ntohs(tcp_header->dest) <= rule->dst_port_max) &&
+                (rule->protocol == ip_header->protocol || rule->protocol == 0))
+            {
+                match = rule->action;
+                break;
+            }
+        }
+        read_unlock(&rule_table->lock);
+
+        if (match == NF_ACCEPT)
+        {
+            printk(KERN_INFO MODULE_NAME ": Packet matched rule, rule's action is NF_ACCEPT.\n");
+            return NF_ACCEPT;
+        }
+        else if (match == NF_DROP)
+        {
+            printk(KERN_INFO MODULE_NAME ": Packet matched rule, rule's action is NF_DROP.\n");
+            return NF_DROP;
+        }
+        return NF_ACCEPT;
     }
 
-    return NF_ACCEPT;
+    // 处理UDP协议
+    /*TODO_1:每一个有效ACCEPT都要在连接表中新建连接
+    TODO_2:根据rule.logging字段是否记录日志*/
+    // 处理UDP协议
+    if (ip_header->protocol == IPPROTO_UDP)
+    {
+        udp_header = udp_hdr(skb);
+        if (!udp_header)
+        {
+            printk(KERN_ERR MODULE_NAME ": UDP header is NULL\n");
+            return NF_ACCEPT;
+        }
+
+        // 检测是否匹配上规则
+        read_lock(&rule_table->lock);
+        list_for_each_entry(rule, rule_table->head, list)
+        {
+            if (((rule->src_ip == ip_header->saddr || rule->src_ip == 0) ||
+                 (rule->src_ip & rule->smask) == (ip_header->saddr & rule->smask)) &&
+                ((rule->dst_ip == ip_header->daddr || rule->dst_ip == 0) ||
+                 (rule->dst_ip & rule->dmask) == (ip_header->daddr & rule->dmask)) &&
+                (ntohs(udp_header->source) >= rule->src_port_min && ntohs(udp_header->source) <= rule->src_port_max) &&
+                (ntohs(udp_header->dest) >= rule->dst_port_min && ntohs(udp_header->dest) <= rule->dst_port_max) &&
+                (rule->protocol == ip_header->protocol || rule->protocol == 0))
+            {
+                match = rule->action;
+                break;
+            }
+        }
+        read_unlock(&rule_table->lock);
+
+        if (match == NF_ACCEPT)
+        {
+            printk(KERN_INFO MODULE_NAME ": Packet matched rule, rule's action is NF_ACCEPT.\n");
+            return NF_ACCEPT;
+        }
+        else if (match == NF_DROP)
+        {
+            printk(KERN_INFO MODULE_NAME ": Packet matched rule, rule's action is NF_DROP.\n");
+            return NF_DROP;
+        }
+        return NF_ACCEPT;
+    }
 }
 
 // 定义Netfilter钩子

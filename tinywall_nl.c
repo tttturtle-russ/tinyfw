@@ -7,7 +7,7 @@
 
 struct sock *nl_sk = NULL;
 
-// Netlink消息接收函数
+/* >-----------------内核处理输入部分-----------------<*/
 static void nl_recv_msg(struct sk_buff *skb)
 {
     struct nlmsghdr *nlh;
@@ -50,6 +50,7 @@ static void nl_recv_msg(struct sk_buff *skb)
     }
 }
 
+/* >-----------------内核发送部分-----------------<*/
 static void nl_send_msg(int type, firewall_rule *rule)
 {
     struct sk_buff *skb;
@@ -62,7 +63,8 @@ static void nl_send_msg(int type, firewall_rule *rule)
         printk(KERN_ALERT MODULE_NAME ": Error allocating skb.\n");
     }
 }
-// Netlink通信初始化
+
+/* >-----------------netlink init()-----------------<*/
 static int __init firewall_netlink_init(void)
 {
     struct netlink_kernel_cfg cfg = {
@@ -81,7 +83,7 @@ static int __init firewall_netlink_init(void)
     return 0;
 }
 
-// Netlink通信退出
+/* >-----------------netlink_exit()-----------------<*/
 static void __exit firewall_netlink_exit(void)
 {
     // release the netlink socket
@@ -89,9 +91,11 @@ static void __exit firewall_netlink_exit(void)
     printk(KERN_INFO MODULE_NAME ": Netlink module unloaded.\n");
 }
 
+/* >-----------------module init()/exit()-----------------<*/
 module_init(firewall_netlink_init);
 module_exit(firewall_netlink_exit);
 
+/* >-----------------module license-----------------<*/
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("sxk");
 MODULE_DESCRIPTION("Custom Netfilter Firewall Module with Netlink Interface");
