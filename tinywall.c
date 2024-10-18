@@ -22,7 +22,7 @@ struct tinywall_rule_table *tinywall_rule_table_init(void)
     rule_table = kmalloc(sizeof(struct tinywall_rule_table), GFP_KERNEL);
     if (!rule_table)
         return NULL;
-    INIT_LIST_HEAD(rule_table->head);
+    INIT_LIST_HEAD(&rule_table->head);
     rwlock_init(&rule_table->lock);
     rule_table->rule_count = 0;
     return rule_table;
@@ -33,6 +33,10 @@ int tinywall_rule_add(firewall_rule_user *new_rule)
 {
     if (!new_rule)
         return -ENOMEM;
+
+    if (!rule_table)
+        return -EFAULT;
+        
     firewall_rule *rule = kmalloc(sizeof(*rule), GFP_KERNEL);
     if (!rule)
         return -ENOMEM;
@@ -61,6 +65,9 @@ int tinywall_rule_add(firewall_rule_user *new_rule)
 // RULE DEL FUNCTION
 int tinywall_rule_remove(unsigned int rule_id_to_del)
 {
+    if (!rule_table)
+        return -EFAULT;
+
     struct firewall_rule *rule;
     bool found = 0;
     int rule_number = 0;
@@ -89,6 +96,12 @@ int tinywall_rule_remove(unsigned int rule_id_to_del)
 // RULE LIST FUNCTION
 void tinywall_rules_list(void)
 {
+    if (!rule_table)
+    {
+        printk(KERN_INFO MODULE_NAME ": Rule table is not initialized.\n");
+        return;
+    }
+
     struct firewall_rule *rule;
     bool has_rules = false;
     int rule_number = 0; // 用于记录规则的序号
@@ -120,6 +133,12 @@ void tinywall_rules_list(void)
 // RULE CLEAR FUNCTION
 void tinywall_rules_clear(void)
 {
+    if (!rule_table)
+    {
+        printk(KERN_INFO MODULE_NAME ": Rule table is not initialized.\n");
+        return;
+    }
+
     struct firewall_rule *rule, *tmp;
 
     write_lock(&rule_table->lock);
@@ -154,6 +173,17 @@ struct tinywall_conn_table *tinywall_conntable_init(void)
 // hash lookup function
 struct tinywall_conn *tinywall_conn_lookup(struct tinywall_conn *conn)
 {
+    if (!conn_table)
+    {
+        printk(KERN_ERR MODULE_NAME ": conn_table is NULL\n");
+        return;
+    }
+    if (!conn)
+    {
+        printk(KERN_ERR MODULE_NAME ": conn is NULL\n");
+        return;
+    }
+    read_lock(&conn_table->lock);
     size_t hash = tinywall_hash(conn);
     struct tinywall_conn *entry;
     hlist_for_each_entry(entry, &conn_table->table[hash], node)
@@ -166,12 +196,18 @@ struct tinywall_conn *tinywall_conn_lookup(struct tinywall_conn *conn)
             return entry;
         }
     }
+    read_unlock(&conn_table->lock);
     return NULL;
 }
 
 // 新建连接插入hash表或更新连接
 static void tinywall_conn_insert(struct tinywall_conn *conn)
 {
+    if (!conn_table)
+    {
+        printk(KERN_ERR MODULE_NAME ": conn_table is NULL\n");
+        return;
+    }
     size_t hash = tinywall_hash(conn);
     struct tinywall_conn *entry = NULL;
 
@@ -192,6 +228,12 @@ static void tinywall_conn_insert(struct tinywall_conn *conn)
 // 删除连接
 static void tinywall_conn_delete(struct tinywall_conn *conn)
 {
+    if (!conn_table)
+    {
+        printk(KERN_ERR MODULE_NAME ": conn_table is NULL\n");
+        return;
+    }
+
     struct tinywall_conn *tmp = tinywall_conn_lookup(conn);
     if (!tmp)
         return;
@@ -359,7 +401,7 @@ static unsigned int firewall_hook(void *priv,
         }
         return NF_ACCEPT;
     }
-    //默认通过
+    // 默认通过
     return NF_ACCEPT;
 }
 
