@@ -36,12 +36,20 @@ void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr) 
     rule.protocol = protocol;
 
     nlh->nlmsg_type = TINYWALL_TYPE_ADD_RULE;
+    nlh->nlmsg_flags = NLM_F_REQUEST;
+    nlh->nlmsg_seq = 1;
+    nlh->nlmsg_pid = getpid();
     memcpy(NLMSG_DATA(nlh), &rule, sizeof(rule));
 
     struct iovec iov = { .iov_base = (void *)nlh, .iov_len = nlh->nlmsg_len };
     struct msghdr msg = { .msg_name = (void *)dest_addr, .msg_namelen = sizeof(*dest_addr), .msg_iov = &iov, .msg_iovlen = 1 };
 
-    sendmsg(sock_fd, &msg, 0);
+    if (sendmsg(sock_fd, &msg, 0) < 0) {
+        perror("sendmsg");
+        exit(1);
+    }
+
+    printf("Rule added successfully.\n");
 }
 
 void rule_remove(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr) {

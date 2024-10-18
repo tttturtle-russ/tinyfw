@@ -13,22 +13,33 @@ struct sock *nl_sk = NULL;
 static void nl_recv_msg(struct sk_buff *skb)
 {
     struct nlmsghdr *nlh;
-    firewall_rule_user rule;
+    struct firewall_rule_user *rule;
 
     nlh = nlmsg_hdr(skb);
-    memcpy(&rule, nlmsg_data(nlh), sizeof(rule));
+    rule = (struct firewall_rule_user *)nlmsg_data(nlh);
 
     if (nlh->nlmsg_type == TINYWALL_TYPE_ADD_RULE)
     {
-        tinywall_rule_add(&rule);
+        printk(KERN_INFO MODULE_NAME ": Received a new rule to add.\n");
+        printk(KERN_INFO MODULE_NAME ": Source IP: %pI4, Destination IP: %pI4, Source Port: %d, Destination Port: %d, Protocol: %u\n",
+               &rule->src_ip, &rule->dst_ip, ntohs(rule->src_port), ntohs(rule->dst_port), rule->protocol);
+        tinywall_rule_add(rule);
     }
     else if (nlh->nlmsg_type == TINYWALL_TYPE_DEL_RULE)
     {
-        tinywall_rule_remove(&rule);
+        printk(KERN_INFO MODULE_NAME ": Received a rule to delete.\n");
+        printk(KERN_INFO MODULE_NAME ": Source IP: %pI4, Destination IP: %pI4, Source Port: %d, Destination Port: %d, Protocol: %u\n",
+               &rule->src_ip, &rule->dst_ip, ntohs(rule->src_port), ntohs(rule->dst_port), rule->protocol);
+        tinywall_rule_remove(rule);
     }
     else if (nlh->nlmsg_type == TINYWALL_TYPE_LIST_RULES)
     {
+        printk(KERN_INFO MODULE_NAME ": Received a request to list rules.\n");
         tinywall_rules_list();
+    }
+    else
+    {
+        printk(KERN_INFO MODULE_NAME ": Unknown message type: %d\n", nlh->nlmsg_type);
     }
 }
 

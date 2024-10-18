@@ -29,9 +29,11 @@ clean:
 # 安装内核模块
 install:
 	sudo insmod $(PWD)/tinywall.ko
+	sudo insmod $(PWD)/tinywall_nl.ko
 
 # 卸载内核模块
 uninstall:
+	sudo rmmod tinywall_nl
 	sudo rmmod tinywall
 
 .PHONY: all modules user_cmd clean install uninstall
