@@ -1,6 +1,6 @@
 #define NLMSG_MAX_SIZE 1024
 #define NETLINK_USER 31
-#define TINY_HASHTABLE_BITS (10)
+#define HASH_SIZE 1024
 // 定义过滤规则结构
 
 // 用户空间的 firewall_rule 结构体（没有 struct list_head）
@@ -17,6 +17,7 @@ typedef struct firewall_rule_user
     __u8 protocol;
     __u8 action;
     __u8 logging;
+    __u64 timeout;
 } firewall_rule_user;
 
 // 定义规则操作

@@ -28,11 +28,12 @@ typedef struct firewall_rule
     __u8 protocol;
     __u8 action;
     __u8 logging;
+    __u64 timeout;
     struct list_head list;
 } firewall_rule;
 
 /* >-----------------conn entity-----------------<*/
-struct xwall_connection
+struct tinywall_conn
 {
     __be32 saddr;
     __be32 daddr;
@@ -65,17 +66,18 @@ struct tinywall_rule_table
 {
     rwlock_t lock; // 读写锁
     __u32 rule_count;
-    struct list_head *head; // 链表头
+    struct list_head *head; // 哈希链表头
 };
 
 /* >-----------------连接表-----------------<*/
-struct tinywall_conntable
+struct tinywall_conn_table
 {
     rwlock_t lock;
-    unsigned int conn_num;
-    DECLARE_HASHTABLE(hashtable, TINY_HASHTABLE_BITS);
+    __u32 conn_count;
+    struct hlist_head table[HASH_SIZE];
 };
-// 函数声明
+
+/* >-----------------函数声明-----------------<*/
 int tinywall_rule_add(firewall_rule_user *new_rule);
 
 int tinywall_rule_remove(unsigned int rule_id);
@@ -84,4 +86,25 @@ void tinywall_rules_list(void);
 
 void tinywall_rules_clear(void);
 
-#endif // MY_FIREWALL_H
+// hash函数
+static inline size_t tinywall_hash(struct tinywall_conn *conn)
+{
+    size_t hash = 0;
+    hash = jhash_2words(conn->saddr, conn->daddr, hash);
+    hash = jhash_2words(conn->protocol, conn->timeout, hash);
+    switch (conn->protocol)
+    {
+    case IPPROTO_TCP:
+        hash = jhash_2words(ntohs(conn->tcp.sport), ntohs(conn->tcp.dport), hash);
+        break;
+    case IPPROTO_UDP:
+        hash = jhash_2words(ntohs(conn->udp.sport), ntohs(conn->udp.dport), hash);
+        break;
+    case IPPROTO_ICMP:
+        hash = jhash_2words(conn->icmp.type, conn->icmp.code, hash);
+        break;
+    }
+    return hash % HASH_SIZE;
+}
+
+#endif

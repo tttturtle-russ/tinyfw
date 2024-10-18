@@ -39,9 +39,9 @@ void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr)
     printf("Enter protocol (1 for ICMP, 6 for TCP, 17 for UDP,): ");
     scanf("%d", &protocol);
     printf("Enter action (1 for accept, 0 for drop): ");
-    scanf("%d", &rule.action);
+    scanf("%c", &rule.action);
     printf("Enter logging (0 for no logging, 1 for logging): ");
-    scanf("%d", &rule.logging);
+    scanf("%c", &rule.logging);
 
     rule.src_ip = inet_addr(src_ip);
     rule.dst_ip = inet_addr(dst_ip);
