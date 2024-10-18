@@ -22,7 +22,7 @@ struct tinywall_rule_table *tinywall_rule_table_init(void)
     rule_table = kmalloc(sizeof(struct tinywall_rule_table), GFP_KERNEL);
     if (!rule_table)
         return NULL;
-    INIT_LIST_HEAD(&rule_table->head);
+    INIT_LIST_HEAD(rule_table->head);
     rwlock_init(&rule_table->lock);
     rule_table->rule_count = 0;
     return rule_table;
@@ -176,12 +176,12 @@ struct tinywall_conn *tinywall_conn_lookup(struct tinywall_conn *conn)
     if (!conn_table)
     {
         printk(KERN_ERR MODULE_NAME ": conn_table is NULL\n");
-        return;
+        return NULL;
     }
     if (!conn)
     {
         printk(KERN_ERR MODULE_NAME ": conn is NULL\n");
-        return;
+        return NULL;
     }
     read_lock(&conn_table->lock);
     size_t hash = tinywall_hash(conn);
