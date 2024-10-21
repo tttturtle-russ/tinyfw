@@ -8,8 +8,8 @@ typedef struct firewall_rule_user
 {
     __be32 src_ip;
     __be32 dst_ip;
-    __be32 smask;
-    __be32 dmask;
+    __be16 smask;
+    __be16 dmask;
     __be16 src_port_min;
     __be16 src_port_max;
     __be16 dst_port_min;

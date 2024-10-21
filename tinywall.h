@@ -19,15 +19,15 @@ typedef struct firewall_rule
 {
     __be32 src_ip;
     __be32 dst_ip;
-    __be32 smask;
-    __be32 dmask;
+    __be16 smask;
+    __be16 dmask;
     __be16 src_port_min;
     __be16 src_port_max;
     __be16 dst_port_min;
     __be16 dst_port_max;
-    __u8 protocol;
-    __u8 action;
-    __u8 logging;
+    __be16 protocol;
+    __be16 action;
+    __be16 logging;
     struct list_head list;
 } firewall_rule;
 
@@ -77,7 +77,7 @@ struct tinywall_conn_table
 };
 
 /* >-----------------函数声明-----------------<*/
-int tinywall_rule_add(firewall_rule_user *new_rule);
+int tinywall_rule_add(firewall_rule *new_rule);
 
 int tinywall_rule_remove(unsigned int rule_id);
 

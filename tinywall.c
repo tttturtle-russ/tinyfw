@@ -26,7 +26,7 @@ void tinywall_rule_table_init(void)
 }
 
 // RULE TABLE ADD FUNCTION
-int tinywall_rule_add(firewall_rule_user *new_rule)
+int tinywall_rule_add(firewall_rule *new_rule)
 {
     if (!new_rule)
         return -ENOMEM;
@@ -44,22 +44,21 @@ int tinywall_rule_add(firewall_rule_user *new_rule)
     rule->action = new_rule->action;
     rule->smask = new_rule->smask;
     rule->dmask = new_rule->dmask;
-    rule->timeout = new_rule->timeout;
     rule->logging = new_rule->logging;
-
+    printk("tinywall_rule_add");
     write_lock(&rule_table.lock);
     list_add(&rule->list, &rule_table.head);
     rule_table.rule_count++;
     write_unlock(&rule_table.lock);
 
-    printk(KERN_INFO MODULE_NAME ": Added a new rule: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u, action: %u,logging: %u\n",
-           rule->src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max),
-           rule->smask,
-           rule->dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max),
-           rule->dmask,
-           rule->protocol,
-           rule->action,
-           rule->logging);
+    // 将 __be32 类型的 IP 地址转换为 struct in_addr 类型
+    struct in_addr src_ip, dst_ip;
+    src_ip.s_addr = rule->src_ip;
+    dst_ip.s_addr = rule->dst_ip;
+    printk(KERN_INFO MODULE_NAME ": Add a new rule: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u, action: %u, logging: %u\n",
+           &src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max), ntohs(rule->smask),
+           &dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max), ntohs(rule->dmask),
+           ntohs(rule->protocol), ntohs(rule->action), ntohs(rule->logging));
     return 0;
 }
 
@@ -69,6 +68,7 @@ int tinywall_rule_remove(unsigned int rule_id)
     firewall_rule *rule;
     bool found = 0;
     int rule_number = 0;
+    printk("tinywall_rule_remove: rule_id=%d\n", rule_id);
     write_lock(&rule_table.lock);
     list_for_each_entry(rule, &rule_table.head, list)
     {
@@ -98,21 +98,21 @@ void tinywall_rules_list(void)
     struct firewall_rule *rule;
     bool has_rules = false;
     int rule_number = 0; // 用于记录规则的序号
+    struct in_addr src_ip, dst_ip; // 将 __be32 类型的 IP 地址转换为 struct in_addr 类型
 
     read_lock(&rule_table.lock);
-
     // 遍历 rule_table
     list_for_each_entry(rule, &rule_table.head, list)
     {
         has_rules = true;
         rule_number++;
-        printk(KERN_INFO MODULE_NAME ": Rule %d: %pI4/%d:%d-%d -> %pI4/%d:%d-%d, proto: %u, action: %u,logging: %d\n",
-               rule_number,
-               rule->src_ip, rule->smask, ntohs(rule->src_port_min), ntohs(rule->src_port_max),
-               rule->dst_ip, rule->dmask, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max),
-               rule->protocol,
-               rule->action,
-               rule->logging);
+        src_ip.s_addr = rule->src_ip;
+        dst_ip.s_addr = rule->dst_ip;
+        printk(KERN_INFO MODULE_NAME ": RULE[%d] : %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u, action: %u, logging: %u\n",
+               &rule_number,
+               &src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max), ntohs(rule->smask),
+               &dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max), ntohs(rule->dmask),
+               ntohs(rule->protocol), ntohs(rule->action), ntohs(rule->logging));
     }
 
     // 如果没有规则，输出 "NO RULES"
@@ -137,6 +137,7 @@ void tinywall_rules_clear(void)
         list_del(&rule->list);
         kfree(rule);
     }
+    printk(KERN_INFO MODULE_NAME ": Cleared all rules\n");
     write_unlock(&rule_table.lock);
 }
 

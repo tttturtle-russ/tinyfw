@@ -11,23 +11,42 @@ struct sock *nl_sk = NULL;
 static void nl_recv_msg(struct sk_buff *skb)
 {
     struct nlmsghdr *nlh;
-    struct firewall_rule_user *rule;
+    struct firewall_rule *rule;
+
+    // check the skb and nlh size
+    if (!skb || skb->len < sizeof(*nlh))
+    {
+        printk(KERN_ERR "Invalid skb or nlh size\n");
+        return;
+    }
 
     nlh = nlmsg_hdr(skb);
-    rule = (struct firewall_rule_user *)nlmsg_data(nlh);
+    // if (nlh->nlmsg_len < sizeof(*rule))
+    // {
+    //     printk(KERN_ERR "Message too short\n");
+    //     return;
+    // }
+    rule = (struct firewall_rule *)NLMSG_DATA(nlh);
     unsigned int rule_id_to_delete = nlh->nlmsg_flags;
 
+    // 确保 rule 结构体中的 IP 地址是有效的
+    if (!rule->src_ip || !rule->dst_ip)
+    {
+        printk(KERN_ERR "Invalid IP addresses\n");
+        return;
+    }
+
+    // 将 __be32 类型的 IP 地址转换为 struct in_addr 类型
+    struct in_addr src_ip, dst_ip;
+    src_ip.s_addr = rule->src_ip;
+    dst_ip.s_addr = rule->dst_ip;
     if (nlh->nlmsg_type == TINYWALL_TYPE_ADD_RULE)
     {
-        printk(KERN_INFO MODULE_NAME ": Received a new rule to add.\n");
-        printk(KERN_INFO MODULE_NAME ": Add a new rule: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u, action: %u,logging: %u\n",
-               rule->src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max),
-               rule->smask,
-               rule->dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max),
-               rule->dmask,
-               rule->protocol,
-               rule->action,
-               rule->logging);
+        printk(KERN_INFO MODULE_NAME ": Netlink message received.\n");
+        printk(KERN_INFO MODULE_NAME ": Add a new rule: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u, action: %u, logging: %u\n",
+               &src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max), ntohs(rule->smask),
+               &dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max), ntohs(rule->dmask),
+               ntohs(rule->protocol), ntohs(rule->action), ntohs(rule->logging));
         tinywall_rule_add(rule);
     }
     else if (nlh->nlmsg_type == TINYWALL_TYPE_DEL_RULE)
