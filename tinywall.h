@@ -66,7 +66,7 @@ struct tinywall_rule_table
 {
     rwlock_t lock; // 读写锁
     __u32 rule_count;
-    struct list_head *head; // 哈希链表头
+    struct list_head head; // 哈希链表头
 };
 
 /* >-----------------连接表-----------------<*/
