@@ -1,0 +1,1 @@
+cmd_/home/sxk/tinyfw/tinywall_nl.ko := ld -r  -m elf_x86_64 -z noexecstack   --build-id=sha1  -T scripts/module.lds -o /home/sxk/tinyfw/tinywall_nl.ko /home/sxk/tinyfw/tinywall_nl.o /home/sxk/tinyfw/tinywall_nl.mod.o;  true

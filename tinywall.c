@@ -63,7 +63,7 @@ int tinywall_rule_add(firewall_rule_user *new_rule)
 }
 
 // RULE DEL FUNCTION
-int tinywall_rule_remove(unsigned int rule_id_to_del)
+int tinywall_rule_remove(unsigned int rule_id)
 {
     if (!rule_table)
         return -EFAULT;
@@ -75,7 +75,7 @@ int tinywall_rule_remove(unsigned int rule_id_to_del)
     list_for_each_entry(rule, rule_table->head, list)
     {
         rule_number++;
-        if (rule_number == rule_id_to_del)
+        if (rule_number == rule_id)
         {
             list_del(&rule->list);
             printk(KERN_INFO MODULE_NAME ": Deleted rule %d\n", rule_number);
@@ -87,7 +87,7 @@ int tinywall_rule_remove(unsigned int rule_id_to_del)
     write_unlock(&rule_table->lock);
     if (!found)
     {
-        printk(KERN_ERR MODULE_NAME ": Rule %d not found\n", rule_id_to_del);
+        printk(KERN_ERR MODULE_NAME ": Rule %d not found\n", rule_id);
         return -EINVAL;
     }
     return 0;
@@ -258,11 +258,11 @@ static unsigned int firewall_hook(void *priv,
                                   struct sk_buff *skb,
                                   const struct nf_hook_state *state)
 {
-    struct iphdr *ip_header;
-    struct tcphdr *tcp_header;
-    struct udphdr *udp_header;
-    struct icmphdr *icmp_header;
-    firewall_rule *rule;
+    // struct iphdr *ip_header;
+    // struct tcphdr *tcp_header;
+    // struct udphdr *udp_header;
+    // struct icmphdr *icmp_header;
+    // firewall_rule *rule;
     int match = -1; // 匹配动作
 
     /*空数据包或者空ip头*/
@@ -271,7 +271,8 @@ static unsigned int firewall_hook(void *priv,
         return NF_ACCEPT;
     }
 
-    ip_header = ip_hdr(skb);
+    struct iphdr *ip_header = ip_hdr(skb);
+
     if (!ip_header)
     {
         return NF_ACCEPT;
@@ -282,13 +283,15 @@ static unsigned int firewall_hook(void *priv,
     TODO_2:根据rule.logging字段是否记录日志*/
     if (ip_header->protocol == IPPROTO_ICMP)
     {
-        icmp_header = (struct icmphdr *)((unsigned char *)ip_header + (ip_header->ihl * 4));
+        struct icmphdr *icmp_header = (struct icmphdr *)((unsigned char *)ip_header + (ip_header->ihl * 4));
         if (!icmp_header)
         {
             // printk("null icmp_header");
             return NF_ACCEPT;
         }
         // 检测是否匹配上规则
+
+        firewall_rule *rule;
         read_lock(&rule_table->lock);
         list_for_each_entry(rule, rule_table->head, list)
         {
@@ -321,13 +324,14 @@ static unsigned int firewall_hook(void *priv,
     TODO_2:根据rule.logging字段是否记录日志*/
     if (ip_header->protocol == IPPROTO_TCP)
     {
-        tcp_header = tcp_hdr(skb);
+        struct tcphdr *tcp_header = tcp_hdr(skb);
         if (!tcp_header)
         {
             printk(KERN_ERR MODULE_NAME ": TCP header is NULL\n");
             return NF_ACCEPT;
         }
         // 检测是否匹配上规则
+        firewall_rule *rule;
         read_lock(&rule_table->lock);
         list_for_each_entry(rule, rule_table->head, list)
         {
@@ -364,7 +368,7 @@ static unsigned int firewall_hook(void *priv,
     // 处理UDP协议
     if (ip_header->protocol == IPPROTO_UDP)
     {
-        udp_header = udp_hdr(skb);
+        struct udphdr *udp_header = udp_hdr(skb);
         if (!udp_header)
         {
             printk(KERN_ERR MODULE_NAME ": UDP header is NULL\n");
@@ -372,6 +376,7 @@ static unsigned int firewall_hook(void *priv,
         }
 
         // 检测是否匹配上规则
+        firewall_rule *rule;
         read_lock(&rule_table->lock);
         list_for_each_entry(rule, rule_table->head, list)
         {
@@ -420,14 +425,16 @@ static int __init firewall_init(void)
 
     /* 初始化规则表 */
     rule_table = tinywall_rule_table_init();
-    if(rule_table == NULL){
+    if (rule_table == NULL)
+    {
         printk(KERN_ERR MODULE_NAME ": Failed to init rule table\n");
         return -ENOMEM;
     }
 
     /* 初始化连接表 */
     conn_table = tinywall_conn_table_init();
-    if(conn_table == NULL){
+    if (conn_table == NULL)
+    {
         printk(KERN_ERR MODULE_NAME ": Failed to init conn table\n");
         return -ENOMEM;
     }
