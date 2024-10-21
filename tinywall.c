@@ -19,13 +19,13 @@ struct tinywall_conn_table *conn_table = NULL;
 struct tinywall_rule_table *tinywall_rule_table_init(void)
 {
     // 初始化规则链表和锁
-    rule_table = kmalloc(sizeof(struct tinywall_rule_table), GFP_KERNEL);
-    if (!rule_table)
+    struct tinywall_rule_table *tmp = kmalloc(sizeof(struct tinywall_rule_table), GFP_KERNEL);
+    if (!tmp)
         return NULL;
-    INIT_LIST_HEAD(rule_table->head);
-    rwlock_init(&rule_table->lock);
-    rule_table->rule_count = 0;
-    return rule_table;
+    INIT_LIST_HEAD(tmp->head);
+    rwlock_init(&tmp->lock);
+    tmp->rule_count = 0;
+    return tmp;
 }
 
 // RULE TABLE ADD FUNCTION
@@ -36,7 +36,7 @@ int tinywall_rule_add(firewall_rule_user *new_rule)
 
     if (!rule_table)
         return -EFAULT;
-        
+
     firewall_rule *rule = kmalloc(sizeof(*rule), GFP_KERNEL);
     if (!rule)
         return -ENOMEM;
@@ -152,22 +152,22 @@ void tinywall_rules_clear(void)
 
 /* >-----------------连接表部分-----------------<*/
 /* CONNTABLE INIT FUNCTIONS */
-struct tinywall_conn_table *tinywall_conntable_init(void)
+struct tinywall_conn_table *tinywall_conn_table_init(void)
 {
     int i = 0;
-    conn_table = kmalloc(sizeof(struct tinywall_conn_table), GFP_KERNEL);
-    if (!conn_table)
+    struct tinywall_conn_table *tmp = kmalloc(sizeof(struct tinywall_conn_table), GFP_KERNEL);
+    if (!tmp)
     {
         return ERR_PTR(-ENOMEM);
     }
     // INIT_LIST_HEAD(&conn_table->table);
     for (i = 0; i < HASH_SIZE; i++)
     {
-        INIT_HLIST_HEAD(&conn_table->table[i]);
+        INIT_HLIST_HEAD(&tmp->table[i]);
     }
-    rwlock_init(&conn_table->lock);
-    conn_table->conn_count = 0;
-    return conn_table;
+    rwlock_init(&tmp->lock);
+    tmp->conn_count = 0;
+    return tmp;
 }
 
 // hash lookup function
@@ -416,13 +416,21 @@ static struct nf_hook_ops firewall_nfho = {
 // 模块初始化
 static int __init firewall_init(void)
 {
-    int ret;
+    int ret = 0;
 
     /* 初始化规则表 */
-    tinywall_rule_table_init();
+    rule_table = tinywall_rule_table_init();
+    if(rule_table == NULL){
+        printk(KERN_ERR MODULE_NAME ": Failed to init rule table\n");
+        return -ENOMEM;
+    }
 
     /* 初始化连接表 */
-    tinywall_conntable_init();
+    conn_table = tinywall_conn_table_init();
+    if(conn_table == NULL){
+        printk(KERN_ERR MODULE_NAME ": Failed to init conn table\n");
+        return -ENOMEM;
+    }
     // 注册Netfilter钩子
     ret = nf_register_net_hook(&init_net, &firewall_nfho);
     if (ret)
