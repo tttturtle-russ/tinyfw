@@ -14,10 +14,9 @@ typedef struct firewall_rule_user
     __be16 src_port_max;
     __be16 dst_port_min;
     __be16 dst_port_max;
-    __u8 protocol;
-    __u8 action;
-    __u8 logging;
-    __u64 timeout;
+    __be16 protocol;
+    __be16 action;
+    __be16 logging;
 } firewall_rule_user;
 
 // 定义规则操作

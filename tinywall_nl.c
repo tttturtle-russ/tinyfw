@@ -20,12 +20,14 @@ static void nl_recv_msg(struct sk_buff *skb)
     if (nlh->nlmsg_type == TINYWALL_TYPE_ADD_RULE)
     {
         printk(KERN_INFO MODULE_NAME ": Received a new rule to add.\n");
-        printk(KERN_INFO MODULE_NAME ": Add a new rule: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u\n",
-               &rule->src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max),
-               &rule->smask,
-               &rule->dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max),
-               &rule->dmask,
-               rule->protocol);
+        printk(KERN_INFO MODULE_NAME ": Add a new rule: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u, action: %u,logging: %u\n",
+               rule->src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max),
+               rule->smask,
+               rule->dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max),
+               rule->dmask,
+               rule->protocol,
+               rule->action,
+               rule->logging);
         tinywall_rule_add(rule);
     }
     else if (nlh->nlmsg_type == TINYWALL_TYPE_DEL_RULE)

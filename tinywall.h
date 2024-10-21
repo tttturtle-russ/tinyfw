@@ -28,7 +28,6 @@ typedef struct firewall_rule
     __u8 protocol;
     __u8 action;
     __u8 logging;
-    __u64 timeout;
     struct list_head list;
 } firewall_rule;
 

@@ -41,18 +41,25 @@ int tinywall_rule_add(firewall_rule_user *new_rule)
     rule->dst_port_min = new_rule->dst_port_min;
     rule->dst_port_max = new_rule->dst_port_max;
     rule->protocol = new_rule->protocol;
+    rule->action = new_rule->action;
+    rule->smask = new_rule->smask;
+    rule->dmask = new_rule->dmask;
+    rule->timeout = new_rule->timeout;
+    rule->logging = new_rule->logging;
 
     write_lock(&rule_table.lock);
     list_add(&rule->list, &rule_table.head);
     rule_table.rule_count++;
     write_unlock(&rule_table.lock);
 
-    printk(KERN_INFO MODULE_NAME ": Added rule: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u\n",
-           &rule->src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max),
-           &rule->smask,
-           &rule->dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max),
-           &rule->dmask,
-           rule->protocol);
+    printk(KERN_INFO MODULE_NAME ": Added a new rule: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u, action: %u,logging: %u\n",
+           rule->src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max),
+           rule->smask,
+           rule->dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max),
+           rule->dmask,
+           rule->protocol,
+           rule->action,
+           rule->logging);
     return 0;
 }
 
@@ -99,11 +106,13 @@ void tinywall_rules_list(void)
     {
         has_rules = true;
         rule_number++;
-        printk(KERN_INFO MODULE_NAME ": Rule %d: %pI4/%d:%d-%d -> %pI4/%d:%d-%d, proto: %u, action: %u\n",
+        printk(KERN_INFO MODULE_NAME ": Rule %d: %pI4/%d:%d-%d -> %pI4/%d:%d-%d, proto: %u, action: %u,logging: %d\n",
                rule_number,
-               &rule->src_ip, rule->smask, ntohs(rule->src_port_min), ntohs(rule->src_port_max),
-               &rule->dst_ip, rule->dmask, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max),
-               rule->protocol,rule->action);
+               rule->src_ip, rule->smask, ntohs(rule->src_port_min), ntohs(rule->src_port_max),
+               rule->dst_ip, rule->dmask, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max),
+               rule->protocol,
+               rule->action,
+               rule->logging);
     }
 
     // 如果没有规则，输出 "NO RULES"
@@ -197,7 +206,7 @@ static unsigned int firewall_hook(void *priv,
         return NF_ACCEPT;
     }
 
-    struct iphdr *ip_header = ip_hdr(skb);
+    ip_header = ip_hdr(skb);
 
     if (!ip_header)
     {
@@ -251,7 +260,6 @@ static unsigned int firewall_hook(void *priv,
             return NF_DROP;
         }
         return NF_ACCEPT;
-    
 
         if (match == NF_ACCEPT)
         {
