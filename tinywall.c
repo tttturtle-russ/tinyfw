@@ -10,12 +10,26 @@
 
 // 初始化规则链表和锁
 static struct tinywall_rule_table rule_table;
+// 初始化连接表
+struct tinywall_conn_table conn_table;
 
-// 添加规则函数
+/* >-----------------规则表部分-----------------<*/
+// RULE TABLE INIT FUNCTION
+void tinywall_rule_table_init(void)
+{
+    // 初始化规则链表和锁
+    INIT_LIST_HEAD(&rule_table.head);
+    rwlock_init(&rule_table.lock);
+    rule_table.rule_count = 0;
+    return;
+}
+
+// RULE TABLE ADD FUNCTION
 int tinywall_rule_add(firewall_rule_user *new_rule)
 {
     if (!new_rule)
         return -ENOMEM;
+
     firewall_rule *rule = kmalloc(sizeof(*rule), GFP_KERNEL);
     if (!rule)
         return -ENOMEM;
@@ -44,7 +58,7 @@ int tinywall_rule_add(firewall_rule_user *new_rule)
 // 删除规则函数
 int tinywall_rule_remove(unsigned int rule_id_to_del)
 {
-    struct firewall_rule *rule;
+    firewall_rule *rule;
     bool found = 0;
     int rule_number = 0;
     write_lock(&rule_table.lock);
@@ -61,18 +75,21 @@ int tinywall_rule_remove(unsigned int rule_id_to_del)
         }
     }
     write_unlock(&rule_table.lock);
-    if(!found){
+    if (!found)
+    {
         printk(KERN_ERR MODULE_NAME ": Rule %d not found\n", rule_id_to_del);
         return -EINVAL;
     }
     return 0;
 }
 
+// RULE LIST FUNCTION
 void tinywall_rules_list(void)
 {
+
     struct firewall_rule *rule;
     bool has_rules = false;
-    int rule_number = 0;  // 用于记录规则的序号
+    int rule_number = 0; // 用于记录规则的序号
 
     read_lock(&rule_table.lock);
 
@@ -81,15 +98,16 @@ void tinywall_rules_list(void)
     {
         has_rules = true;
         rule_number++;
-        printk(KERN_INFO MODULE_NAME ": Rule %d: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u\n",
+        printk(KERN_INFO MODULE_NAME ": Rule %d: %pI4/%d:%d-%d -> %pI4/%d:%d-%d, proto: %u, action: %u\n",
                rule_number,
-               &rule->src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max), rule->smask,
-               &rule->dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max), rule->dmask,
-               rule->protocol);
+               &rule->src_ip, rule->smask, ntohs(rule->src_port_min), ntohs(rule->src_port_max),
+               &rule->dst_ip, rule->dmask, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max),
+               rule->protocol,rule->action);
     }
 
     // 如果没有规则，输出 "NO RULES"
-    if (!has_rules) {
+    if (!has_rules)
+    {
         printk(KERN_INFO MODULE_NAME ": NO RULES\n");
     }
 
@@ -97,8 +115,10 @@ void tinywall_rules_list(void)
     return;
 }
 
+// RULE CLEAR FUNCTION
 void tinywall_rules_clear(void)
 {
+
     struct firewall_rule *rule, *tmp;
 
     write_lock(&rule_table.lock);
@@ -108,6 +128,46 @@ void tinywall_rules_clear(void)
         kfree(rule);
     }
     write_unlock(&rule_table.lock);
+}
+
+/* >-----------------连接表部分-----------------<*/
+/* CONNTABLE INIT FUNCTIONS */
+void tinywall_conn_table_init(void)
+{
+    int i = 0;
+    // INIT_LIST_HEAD(&conn_table->table);
+    for (i = 0; i < HASH_SIZE; i++)
+    {
+        INIT_HLIST_HEAD(&conn_table.table[i]);
+    }
+    rwlock_init(&conn_table.lock);
+    conn_table.conn_count = 0;
+    return;
+}
+
+// hash lookup function
+struct tinywall_conn *tinywall_conn_lookup(struct tinywall_conn *conn)
+{
+    if (!conn)
+    {
+        printk(KERN_ERR MODULE_NAME ": conn is NULL\n");
+        return NULL;
+    }
+    read_lock(&conn_table.lock);
+    size_t hash = tinywall_hash(conn);
+    struct tinywall_conn *entry;
+    hlist_for_each_entry(entry, &conn_table.table[hash], node)
+    {
+        if (entry->saddr == conn->saddr &&
+            entry->daddr == conn->daddr &&
+            entry->protocol == conn->protocol &&
+            (entry->protocol == IPPROTO_TCP ? (entry->tcp.sport == conn->tcp.sport && entry->tcp.dport == conn->tcp.dport) : (entry->protocol == IPPROTO_UDP ? (entry->udp.sport == conn->udp.sport && entry->udp.dport == conn->udp.dport) : (entry->icmp.type == conn->icmp.type && entry->icmp.code == conn->icmp.code))))
+        {
+            return entry;
+        }
+    }
+    read_unlock(&conn_table.lock);
+    return NULL;
 }
 
 // Netfilter钩子函数
@@ -134,7 +194,7 @@ static unsigned int firewall_hook(void *priv,
     // 只处理TCP协议
     if (ip_header->protocol != IPPROTO_TCP)
     {
-        //printk("not tcp");
+        // printk("not tcp");
         return NF_ACCEPT;
     }
 
@@ -193,10 +253,10 @@ static struct nf_hook_ops firewall_nfho = {
 static int __init firewall_init(void)
 {
     int ret;
-    // 初始化规则链表和锁
-    INIT_LIST_HEAD(&rule_table.head);
-    rwlock_init(&rule_table.lock);
-    rule_table.rule_count = 0;
+    // 初始化规则表
+    tinywall_rule_table_init();
+    // 初始化连接表
+    tinywall_conn_table_init();
     // 注册Netfilter钩子
     ret = nf_register_net_hook(&init_net, &firewall_nfho);
     if (ret)
