@@ -14,7 +14,7 @@ static struct tinywall_rule_table rule_table;
 // 初始化连接表
 struct tinywall_conn_table conn_table;
 
-/* >-----------------规则表部分-----------------<*/
+/* >----------------------------------规则表部分----------------------------------<*/
 // RULE TABLE INIT FUNCTION
 void tinywall_rule_table_init(void)
 {
@@ -94,11 +94,9 @@ int tinywall_rule_remove(unsigned int rule_id)
 // RULE LIST FUNCTION
 void tinywall_rules_list(void)
 {
-
     struct firewall_rule *rule;
     bool has_rules = false;
     int rule_number = 0; // 用于记录规则的序号
-    struct in_addr src_ip, dst_ip; // 将 __be32 类型的 IP 地址转换为 struct in_addr 类型
 
     read_lock(&rule_table.lock);
     // 遍历 rule_table
@@ -106,9 +104,10 @@ void tinywall_rules_list(void)
     {
         has_rules = true;
         rule_number++;
+        struct in_addr src_ip, dst_ip; // 将 __be32 类型的 IP 地址转换为 struct in_addr 类型
         src_ip.s_addr = rule->src_ip;
         dst_ip.s_addr = rule->dst_ip;
-        printk(KERN_INFO MODULE_NAME ": RULE[%d] : %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u, action: %u, logging: %u\n",
+        printk(KERN_INFO MODULE_NAME ":[%d]: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u, action: %u, logging: %u\n",
                &rule_number,
                &src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max), ntohs(rule->smask),
                &dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max), ntohs(rule->dmask),
@@ -141,7 +140,36 @@ void tinywall_rules_clear(void)
     write_unlock(&rule_table.lock);
 }
 
-/* >-----------------连接表部分-----------------<*/
+// RULE TABLE DESTROY FUNCTION
+void tinywall_rule_table_destroy(void)
+{
+    struct firewall_rule *rule, *tmp;
+
+    // 清空规则链表
+    write_lock(&rule_table.lock);
+    list_for_each_entry_safe(rule, tmp, &rule_table.head, list)
+    {
+        list_del(&rule->list);
+        kfree(rule);
+    }
+    write_unlock(&rule_table.lock);
+}
+struct firewall_rule* tinywall_rule_get(int num){
+    struct firewall_rule *rule;
+    int i = 0;
+
+    read_lock(&rule_table.lock);
+    list_for_each_entry(rule, &rule_table.head, list)
+    {
+        if(i == num)
+            return rule;
+        i++;
+    }
+    read_unlock(&rule_table.lock);
+    return NULL;
+}
+
+/* >----------------------------------连接表部分----------------------------------<*/
 /* CONNTABLE INIT FUNCTIONS */
 void tinywall_conn_table_init(void)
 {
@@ -182,14 +210,39 @@ struct tinywall_conn *tinywall_conn_lookup(struct tinywall_conn *conn)
 }
 
 // 销毁连接表
-static void tinywall_conntable_destroy(struct tinywall_conn_table *conn_table)
+static void tinywall_conntable_destroy(void)
 {
-    if (conn_table)
+     int i;
+    struct tinywall_conn *conn, *tmp;
+
+    // 获取写锁
+    write_lock(&table->lock);
+
+    // 遍历哈希表中的每个桶
+    for (i = 0; i < HASH_SIZE; i++)
     {
-        kfree(conn_table);
+        // 遍历桶中的每个连接项
+        hlist_for_each_entry_safe(conn, tmp, &table->table[i], node)
+        {
+            // 从哈希表中删除连接项
+            hlist_del(&conn->node);
+
+            // 释放连接项占用的内存
+            kfree(conn);
+        }
     }
+
+    // 释放哈希表本身（如果它是动态分配的）
+    // 注意：这里假设哈希表是静态分配的，不需要释放
+    // 如果是动态分配的，可以使用 kfree(table->table);
+
+    // 释放读写锁
+    write_unlock(&table->lock);
+
+    // 重置连接计数
+    table->conn_count = 0;
 }
-/* >-----------------子模块部分-----------------<*/
+/* >----------------------------------子模块部分----------------------------------<*/
 static unsigned int firewall_hook(void *priv,
                                   struct sk_buff *skb,
                                   const struct nf_hook_state *state)
@@ -309,20 +362,12 @@ static int __init firewall_init(void)
 // 模块退出
 static void __exit firewall_exit(void)
 {
-    struct firewall_rule *rule, *tmp;
-
     // 注销Netfilter钩子
     nf_unregister_net_hook(&init_net, &firewall_nfho);
-
-    // 清空规则链表
-    write_lock(&rule_table.lock);
-    list_for_each_entry_safe(rule, tmp, &rule_table.head, list)
-    {
-        list_del(&rule->list);
-        kfree(rule);
-    }
-    write_unlock(&rule_table.lock);
-
+    //销毁规则表
+    //tinywall_rule_table_destroy();
+    // 销毁连接表
+    //tinywall_conntable_destroy();
     printk(KERN_INFO MODULE_NAME ": Firewall module unloaded.\n");
 }
 
@@ -333,7 +378,8 @@ EXPORT_SYMBOL(tinywall_rules_list);
 EXPORT_SYMBOL(tinywall_rule_remove);
 EXPORT_SYMBOL(tinywall_rule_add);
 EXPORT_SYMBOL(tinywall_rules_clear);
-
+EXPORT_SYMBOL(tinywall_rule_get);
+EXPORT_SYMBOL(rule_table);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Sun Xiaokai suxiaokai34@gmail.com");
 MODULE_DESCRIPTION("A Tiny Netfilter Firewall Module");

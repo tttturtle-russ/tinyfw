@@ -14,7 +14,7 @@
 
 #define MODULE_NAME "tinywall"
 
-/* >-----------------rule entity-----------------<*/
+/* >----------------------------------rule entity----------------------------------<*/
 typedef struct firewall_rule
 {
     __be32 src_ip;
@@ -31,7 +31,7 @@ typedef struct firewall_rule
     struct list_head list;
 } firewall_rule;
 
-/* >-----------------conn entity-----------------<*/
+/* >----------------------------------conn entity----------------------------------<*/
 struct tinywall_conn
 {
     __be32 saddr;
@@ -60,7 +60,7 @@ struct tinywall_conn
     struct hlist_node node;
 };
 
-/* >-----------------规则表-----------------<*/
+/* >----------------------------------规则表----------------------------------<*/
 struct tinywall_rule_table
 {
     rwlock_t lock; // 读写锁
@@ -68,7 +68,7 @@ struct tinywall_rule_table
     struct list_head head; // 哈希链表头
 };
 
-/* >-----------------连接表-----------------<*/
+/* >----------------------------------连接表----------------------------------<*/
 struct tinywall_conn_table
 {
     rwlock_t lock;
@@ -76,7 +76,7 @@ struct tinywall_conn_table
     struct hlist_head table[HASH_SIZE];
 };
 
-/* >-----------------函数声明-----------------<*/
+/* >----------------------------------函数声明----------------------------------<*/
 int tinywall_rule_add(firewall_rule *new_rule);
 
 int tinywall_rule_remove(unsigned int rule_id);
@@ -84,6 +84,8 @@ int tinywall_rule_remove(unsigned int rule_id);
 void tinywall_rules_list(void);
 
 void tinywall_rules_clear(void);
+
+firewall_rule* tinywall_rule_get(int num);
 
 // hash函数
 static inline size_t tinywall_hash(struct tinywall_conn *conn)

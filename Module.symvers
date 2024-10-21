@@ -1,0 +1,6 @@
+0x52112f2b	tinywall_rule_remove	/home/sxk/tinyfw/tinywall	EXPORT_SYMBOL	
+0x3169f806	tinywall_rule_get	/home/sxk/tinyfw/tinywall	EXPORT_SYMBOL	
+0x49641cf7	tinywall_rule_add	/home/sxk/tinyfw/tinywall	EXPORT_SYMBOL	
+0xdd7ba325	rule_table	/home/sxk/tinyfw/tinywall	EXPORT_SYMBOL	
+0xac520d61	tinywall_rules_clear	/home/sxk/tinyfw/tinywall	EXPORT_SYMBOL	
+0x85061dd7	tinywall_rules_list	/home/sxk/tinyfw/tinywall	EXPORT_SYMBOL	

@@ -36,4 +36,7 @@ uninstall:
 	sudo rmmod tinywall_nl
 	sudo rmmod tinywall
 
-.PHONY: all modules user_cmd clean install uninstall
+# 快速操作：编译、卸载、安装
+shot: all uninstall install
+
+.PHONY: all modules user_cmd clean install uninstall shot

@@ -12,7 +12,7 @@
 // 假设 firewall_rule_user 结构体已经定义在 tinywall.h 中
 #include "../public.h"
 
-/* >-----------------rule operations-----------------<*/
+/* >----------------------------------rule operations----------------------------------<*/
 // 增加规则
 void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr, struct firewall_rule_user *rule)
 {
@@ -73,7 +73,7 @@ void rules_clear(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_add
 }
 
 // 从文件中读取规则并添加
-void add_rules_from_file(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr, const char *filename)
+void load_rules_from_file(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr, const char *filename)
 {
     FILE *file = fopen(filename, "r");
     if (!file)
@@ -119,7 +119,9 @@ void add_rules_from_file(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *
         rule.src_port_max = htons(src_port_max);
         rule.dst_port_min = htons(dst_port_min);
         rule.dst_port_max = htons(dst_port_max);
-
+        rule.protocol = htons(rule.protocol);
+        rule.action = htons(rule.action);
+        rule.logging = htons(rule.logging);
         printf("src_ip: %s\n", inet_ntoa(*(struct in_addr *)&rule.src_ip));
         printf("port rage: %hu->%hu  %hu->%hu\n", ntohs(rule.src_port_min), ntohs(rule.src_port_max), ntohs(rule.dst_port_min), ntohs(rule.dst_port_max));
         printf("protocol: %hu action: %hu\n", rule.protocol, rule.action);
@@ -130,6 +132,81 @@ void add_rules_from_file(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *
     fclose(file);
 }
 
+// 将规则表保存为文件
+void rules_store(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr)
+{
+    nlh->nlmsg_type = TINYWALL_TYPE_STORE_RULES;
+    // 发送缓冲区
+    struct iovec iov = {.iov_base = (void *)nlh, .iov_len = nlh->nlmsg_len};
+    struct msghdr msg = {.msg_name = (void *)dest_addr, .msg_namelen = sizeof(*dest_addr), .msg_iov = &iov, .msg_iovlen = 1};
+
+    // 接收缓冲区
+    char buffer[65535];
+    struct iovec iov_recv = {buffer, sizeof(buffer)};
+    struct msghdr msg_recv = {NULL};
+    struct nlmsghdr *nlh_recv = NULL;
+    int ret;
+    // 从内核接受数据
+    msg_recv.msg_name = (void *)&dest_addr;
+    msg_recv.msg_namelen = sizeof(dest_addr);
+    msg_recv.msg_iov = &iov_recv;
+    msg_recv.msg_iovlen = 1;
+    // 发送store命令
+    sendmsg(sock_fd, &msg, 0);
+    while (1)
+    {
+        int num;
+        int count = 0;
+        ret = recvmsg(sock_fd, &msg_recv, 0);
+        if (ret < 0)
+        {
+            perror("recvmsg");
+            break;
+        }
+
+        nlh = (struct nlmsghdr *)buffer;
+
+        // 规则数量
+        num = nlh->nlmsg_flags;
+        while (NLMSG_OK(nlh, ret))
+        {
+            if (nlh->nlmsg_type == NLMSG_DONE)
+            {
+                firewall_rule_user *rule = (firewall_rule_user *)NLMSG_DATA(nlh);
+
+                // 打开文件
+                FILE *fp = fopen("rule_table.txt", "a");
+                if (fp == NULL)
+                {
+                    perror("fopen");
+                    break;
+                }
+
+                // 写入规则
+                fprintf(fp, "%s %d %s %d %d %d %d %d %d %d %d\n",
+                        inet_ntoa(*(struct in_addr *)&rule->src_ip),
+                        ntohs(rule->smask),
+                        inet_ntoa(*(struct in_addr *)&rule->dst_ip),
+                        ntohs(rule->dmask),
+                        ntohs(rule->src_port_min),
+                        ntohs(rule->src_port_max),
+                        ntohs(rule->dst_port_min),
+                        ntohs(rule->dst_port_max),
+                        ntohs(rule->protocol),
+                        ntohs(rule->action),
+                        ntohs(rule->logging));
+                count++;
+                fclose(fp);
+                printf("Rule added to rule_table.txt\n");
+            }
+            nlh = NLMSG_NEXT(nlh, ret);
+        }
+        printf("num: %d\n", num);
+        printf("count: %d\n", count);
+        if(count == num)
+            break;
+    }
+}
 int main()
 {
     struct sockaddr_nl src_addr, dest_addr;
@@ -174,10 +251,11 @@ int main()
     {
         printf("\nMenu:\n");
         printf("0. EXIT\n");
-        printf("1. Add Rule\n");
+        printf("1. Load Rule\n");
         printf("2. Remove Rule\n");
         printf("3. List Rules\n");
         printf("4. Clear Rules\n");
+        printf("5. Store Rules\n");
         printf("Choose an option: ");
 
         int choice = 0;
@@ -190,7 +268,7 @@ int main()
             printf("Enter rule filename:\n");
             char filename[256];
             scanf("%s", filename);
-            add_rules_from_file(sock_fd, nlh, &dest_addr, filename);
+            load_rules_from_file(sock_fd, nlh, &dest_addr, filename);
             break;
         case 2:
             rule_remove(sock_fd, nlh, &dest_addr);
@@ -203,25 +281,9 @@ int main()
             break;
         case 0:
             goto exit;
-        case 5:{
-            firewall_rule_user test;
-            test.src_ip = 0x01020304;
-            test.dst_ip = 0x05060708;
-            test.src_port_min = 0x090a;
-            test.src_port_max = 0x0b0c;
-            test.dst_port_min = 0x0d0e;
-            test.dst_port_max = 0x0f10;
-            test.protocol = 0x1112;
-            test.smask = 0x1213;
-            test.dmask = 0x1314;
-            test.action = 0x1516;
-            test.logging = 0x1718;
-            printf("src_ip: %s\n", inet_ntoa(*(struct in_addr *)&test.src_ip));
-            printf("port rage: %hu->%hu  %hu->%hu\n", ntohs(test.src_port_min), ntohs(test.src_port_max), ntohs(test.dst_port_min), ntohs(test.dst_port_max));
-            rule_add(sock_fd, nlh, &dest_addr, &test);
+        case 5:
+            rules_store(sock_fd, nlh, &dest_addr);
             break;
-        }
-            
         default:
             printf("Invalid choice. Please try again.\n");
             goto menu;
