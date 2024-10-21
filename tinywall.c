@@ -108,7 +108,7 @@ void tinywall_rules_list(void)
         src_ip.s_addr = rule->src_ip;
         dst_ip.s_addr = rule->dst_ip;
         printk(KERN_INFO MODULE_NAME ":[%d]: %pI4:%d-%d smask:%d -> %pI4:%d-%d dmask:%d, proto: %u, action: %u, logging: %u\n",
-               &rule_number,
+               rule_number,
                &src_ip, ntohs(rule->src_port_min), ntohs(rule->src_port_max), ntohs(rule->smask),
                &dst_ip, ntohs(rule->dst_port_min), ntohs(rule->dst_port_max), ntohs(rule->dmask),
                ntohs(rule->protocol), ntohs(rule->action), ntohs(rule->logging));
@@ -154,14 +154,15 @@ void tinywall_rule_table_destroy(void)
     }
     write_unlock(&rule_table.lock);
 }
-struct firewall_rule* tinywall_rule_get(int num){
+struct firewall_rule *tinywall_rule_get(int num)
+{
     struct firewall_rule *rule;
     int i = 0;
 
     read_lock(&rule_table.lock);
     list_for_each_entry(rule, &rule_table.head, list)
     {
-        if(i == num)
+        if (i == num)
             return rule;
         i++;
     }
@@ -212,17 +213,17 @@ struct tinywall_conn *tinywall_conn_lookup(struct tinywall_conn *conn)
 // 销毁连接表
 static void tinywall_conntable_destroy(void)
 {
-     int i;
-    struct tinywall_conn *conn, *tmp;
-
+    int i;
+    struct tinywall_conn *conn;
+    struct hlist_node *tmp;
     // 获取写锁
-    write_lock(&table->lock);
+    write_lock(&conn_table.lock);
 
     // 遍历哈希表中的每个桶
     for (i = 0; i < HASH_SIZE; i++)
     {
         // 遍历桶中的每个连接项
-        hlist_for_each_entry_safe(conn, tmp, &table->table[i], node)
+        hlist_for_each_entry_safe(conn, tmp, &conn_table.table[i], node)
         {
             // 从哈希表中删除连接项
             hlist_del(&conn->node);
@@ -237,10 +238,10 @@ static void tinywall_conntable_destroy(void)
     // 如果是动态分配的，可以使用 kfree(table->table);
 
     // 释放读写锁
-    write_unlock(&table->lock);
+    write_unlock(&conn_table.lock);
 
     // 重置连接计数
-    table->conn_count = 0;
+    conn_table.conn_count = 0;
 }
 /* >----------------------------------子模块部分----------------------------------<*/
 static unsigned int firewall_hook(void *priv,
@@ -364,10 +365,10 @@ static void __exit firewall_exit(void)
 {
     // 注销Netfilter钩子
     nf_unregister_net_hook(&init_net, &firewall_nfho);
-    //销毁规则表
-    //tinywall_rule_table_destroy();
-    // 销毁连接表
-    //tinywall_conntable_destroy();
+    // 销毁规则表
+    tinywall_rule_table_destroy();
+    //  销毁连接表
+    tinywall_conntable_destroy();
     printk(KERN_INFO MODULE_NAME ": Firewall module unloaded.\n");
 }
 

@@ -146,6 +146,7 @@ void rules_store(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_add
     struct msghdr msg_recv = {NULL};
     struct nlmsghdr *nlh_recv = NULL;
     int ret;
+    int count = 0;
     // 从内核接受数据
     msg_recv.msg_name = (void *)&dest_addr;
     msg_recv.msg_namelen = sizeof(dest_addr);
@@ -156,7 +157,6 @@ void rules_store(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_add
     while (1)
     {
         int num;
-        int count = 0;
         ret = recvmsg(sock_fd, &msg_recv, 0);
         if (ret < 0)
         {
