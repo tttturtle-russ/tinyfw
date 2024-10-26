@@ -8,7 +8,7 @@
 #include <linux/netfilter_ipv4.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
-#include<linux/udp.h>
+#include <linux/udp.h>
 #include <linux/icmp.h>
 #include <linux/skbuff.h>
 #include <linux/list.h>
@@ -59,8 +59,39 @@ struct tinywall_conn
             __be16 dport;
         } udp;
     };
-    __be64 timeout; // ktime_t
+    __be64 timeout;
     struct hlist_node node;
+};
+
+struct tinywall_log
+{
+    __be32 idx;
+    __be64 ts;
+    __be32 saddr;
+    __be32 daddr;
+    __u8 protocol;
+    union
+    {
+        struct
+        {
+            __u8 type;
+            __u8 code;
+        } icmp;
+        struct
+        {
+            __be16 sport;
+            __be16 dport;
+            __u8 state;
+        } tcp;
+        struct
+        {
+            __be16 sport;
+            __be16 dport;
+        } udp;
+    };
+    __be16 len;
+    __be32 action;
+    struct list_head node;
 };
 
 /* >----------------------------------规则表----------------------------------<*/
@@ -79,6 +110,13 @@ struct tinywall_conn_table
     struct hlist_head table[HASH_SIZE];
 };
 
+/* >----------------------------------日志表----------------------------------<*/
+struct tinywall_logtable
+{
+    struct mutex lock;
+    unsigned int log_num;
+    struct list_head node;
+};
 /* >----------------------------------函数声明----------------------------------<*/
 int tinywall_rule_add(firewall_rule *new_rule);
 
@@ -88,7 +126,7 @@ void tinywall_rules_list(void);
 
 void tinywall_rules_clear(void);
 
-firewall_rule* tinywall_rule_get(int num);
+firewall_rule *tinywall_rule_get(int num);
 
 struct tinywall_conn *tinywall_connection_create(struct iphdr *iph);
 
