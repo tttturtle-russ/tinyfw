@@ -9,12 +9,12 @@
 
 #define MAX_PAYLOAD 1024
 
-// 假设 firewall_rule_user 结构体已经定义在 tinywall.h 中
+// 假设 tinywall_rule_user 结构体已经定义在 tinywall.h 中
 #include "../public.h"
 
 /* >----------------------------------rule operations----------------------------------<*/
 // 增加规则
-void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr, struct firewall_rule_user *rule)
+void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr, struct tinywall_rule_user *rule)
 {
     nlh->nlmsg_type = TINYWALL_TYPE_ADD_RULE;
     nlh->nlmsg_flags = NLM_F_REQUEST;
@@ -22,9 +22,9 @@ void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr, 
     nlh->nlmsg_pid = getpid();
 
     // 设置消息长度
-    nlh->nlmsg_len = NLMSG_LENGTH(sizeof(firewall_rule_user));
+    nlh->nlmsg_len = NLMSG_LENGTH(sizeof(tinywall_rule_user));
     // 将规则数据拷贝到消息中
-    memcpy(NLMSG_DATA(nlh), rule, sizeof(firewall_rule_user));
+    memcpy(NLMSG_DATA(nlh), rule, sizeof(tinywall_rule_user));
     // 构造消息头和数据
     struct iovec iov = {.iov_base = (void *)nlh, .iov_len = nlh->nlmsg_len};
     struct msghdr msg = {.msg_name = (void *)dest_addr, .msg_namelen = sizeof(*dest_addr), .msg_iov = &iov, .msg_iovlen = 1};
@@ -86,7 +86,7 @@ void load_rules_from_file(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl 
 
     while (fgets(line, sizeof(line), file))
     {
-        firewall_rule_user rule;
+        tinywall_rule_user rule;
         char src_ip_str[16], dst_ip_str[16];
         unsigned short smask, dmask, src_port_min, src_port_max, dst_port_min, dst_port_max = 0;
         int n = sscanf(line, "%15s %hu %15s %hu %hu %hu %hu %hu %hu %hu %hu",
@@ -172,7 +172,7 @@ void rules_store(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_add
         {
             if (nlh->nlmsg_type == NLMSG_DONE)
             {
-                firewall_rule_user *rule = (firewall_rule_user *)NLMSG_DATA(nlh);
+                tinywall_rule_user *rule = (tinywall_rule_user *)NLMSG_DATA(nlh);
 
                 // 打开文件
                 FILE *fp = fopen("rule_table.txt", "a");
@@ -243,7 +243,7 @@ int main()
         exit(1);
     }
     memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
-    nlh->nlmsg_len = NLMSG_SPACE(sizeof(struct firewall_rule_user));
+    nlh->nlmsg_len = NLMSG_SPACE(sizeof(struct tinywall_rule_user));
     nlh->nlmsg_pid = getpid();
     nlh->nlmsg_flags = 0;
 

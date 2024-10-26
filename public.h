@@ -4,7 +4,7 @@
 // 定义过滤规则结构
 
 // 用户空间的 firewall_rule 结构体（没有 struct list_head）
-typedef struct firewall_rule_user
+typedef struct tinywall_rule_user
 {
     __be32 src_ip;
     __be32 dst_ip;
@@ -17,7 +17,7 @@ typedef struct firewall_rule_user
     __be16 protocol;
     __be16 action;
     __be16 logging;
-} firewall_rule_user;
+} tinywall_rule_user;
 
 // 定义规则操作
 enum TINYWALL_REQUEST_TYPE

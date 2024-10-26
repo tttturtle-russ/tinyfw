@@ -16,7 +16,8 @@
         "hashtable.h": "c",
         "typeinfo": "c",
         "icmp.h": "c",
-        "udp.h": "c"
+        "udp.h": "c",
+        "ip.h": "c"
     },
     "C_Cpp.errorSquiggles": "enabled"
 }

@@ -8,13 +8,13 @@
 struct sock *nl_sk = NULL;
 extern struct tinywall_rule_table rule_table;
 static void nl_recv_msg(struct sk_buff *skb);
-static void nl_send_msg(firewall_rule *rule, int pid,int rule_num);
+static void nl_send_msg(tinywall_rule *rule, int pid,int rule_num);
 
 /* >----------------------------------内核处理输入部分----------------------------------<*/
 static void nl_recv_msg(struct sk_buff *skb)
 {
     struct nlmsghdr *nlh;
-    struct firewall_rule *rule;
+    struct tinywall_rule *rule;
 
     // check the skb and nlh size
     if (!skb || skb->len < sizeof(*nlh))
@@ -29,7 +29,7 @@ static void nl_recv_msg(struct sk_buff *skb)
     //     printk(KERN_ERR "Message too short\n");
     //     return;
     // }
-    rule = (struct firewall_rule *)NLMSG_DATA(nlh);
+    rule = (struct tinywall_rule *)NLMSG_DATA(nlh);
     unsigned int rule_id_to_delete = nlh->nlmsg_flags;
 
     // 确保 rule 结构体中的 IP 地址是有效的
@@ -76,7 +76,7 @@ static void nl_recv_msg(struct sk_buff *skb)
         printk(KERN_INFO MODULE_NAME ": Received a request to store rules.\n");
         for (i; i < num; i++)
         {
-            firewall_rule *tmp = tinywall_rule_get(i);
+            tinywall_rule *tmp = tinywall_rule_get(i);
             nl_send_msg(tmp, upid, num);
         }
     }
@@ -87,7 +87,7 @@ static void nl_recv_msg(struct sk_buff *skb)
 }
 
 /* >----------------------------------内核发送部分----------------------------------<*/
-static void nl_send_msg(firewall_rule *rule, int pid,int rule_num)
+static void nl_send_msg(tinywall_rule *rule, int pid,int rule_num)
 {
     struct sk_buff *skb_out;
     struct nlmsghdr *nlh;
@@ -96,7 +96,7 @@ static void nl_send_msg(firewall_rule *rule, int pid,int rule_num)
     char *msg;
 
     // 计算消息大小
-    msg_size = sizeof(firewall_rule) - sizeof(struct list_head);
+    msg_size = sizeof(tinywall_rule) - sizeof(struct list_head);
 
     skb_out = nlmsg_new(msg_size, 0);
     if (!skb_out)
@@ -111,7 +111,7 @@ static void nl_send_msg(firewall_rule *rule, int pid,int rule_num)
     nlh->nlmsg_flags = rule_num;
     msg = (char *)NLMSG_DATA(nlh);
 
-    // 复制 firewall_rule 数据到消息中
+    // 复制 tinywall_rule 数据到消息中
     memcpy(msg, rule, msg_size);
 
     res = nlmsg_unicast(nl_sk, skb_out, pid); // 1 是用户端的 PID

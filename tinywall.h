@@ -18,7 +18,7 @@
 #define MODULE_NAME "tinywall"
 
 /* >----------------------------------rule entity----------------------------------<*/
-typedef struct firewall_rule
+typedef struct tinywall_rule
 {
     __be32 src_ip;
     __be32 dst_ip;
@@ -32,7 +32,7 @@ typedef struct firewall_rule
     __be16 action;
     __be16 logging;
     struct list_head list;
-} firewall_rule;
+} tinywall_rule;
 
 /* >----------------------------------conn entity----------------------------------<*/
 struct tinywall_conn
@@ -115,10 +115,10 @@ struct tinywall_logtable
 {
     struct mutex lock;
     unsigned int log_num;
-    struct list_head node;
+    struct list_head head;
 };
 /* >----------------------------------函数声明----------------------------------<*/
-int tinywall_rule_add(firewall_rule *new_rule);
+int tinywall_rule_add(tinywall_rule *new_rule);
 
 int tinywall_rule_remove(unsigned int rule_id);
 
@@ -126,10 +126,11 @@ void tinywall_rules_list(void);
 
 void tinywall_rules_clear(void);
 
-firewall_rule *tinywall_rule_get(int num);
+tinywall_rule *tinywall_rule_get(int num);
 
 struct tinywall_conn *tinywall_connection_create(struct iphdr *iph);
 
+struct tinywall_rule *tinywall_rule_match(struct tinywall_conn *conn);
 // hash函数
 static inline size_t tinywall_hash(struct tinywall_conn *conn)
 {
