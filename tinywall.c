@@ -194,6 +194,9 @@ void tinywall_conn_table_init(void)
 
 struct tinywall_conn *tinywall_connection_create(struct iphdr *iph)
 {
+    struct tcphdr *tcph = NULL;
+    struct udphdr *udph = NULL;
+    struct icmphdr *icmph = NULL;
     struct tinywall_conn *conn = kmalloc(sizeof(*conn), GFP_KERNEL);
     if (!conn)
         return NULL;
@@ -203,21 +206,21 @@ struct tinywall_conn *tinywall_connection_create(struct iphdr *iph)
     switch (iph->protocol)
     {
     case IPPROTO_TCP:
-        struct tcphdr *tcph = (void *)iph + iph->ihl * 4;
+        tcph = (void *)iph + iph->ihl * 4;
         conn->tcp.sport = tcph->source;
         conn->tcp.dport = tcph->dest;
         conn->timeout =
             htonll(ktime_add_sec(ktime_get_real(), default_timeout_tcp));
         break;
     case IPPROTO_UDP:
-        struct udphdr *udph = (void *)iph + iph->ihl * 4;
+        udph = (void *)iph + iph->ihl * 4;
         conn->udp.sport = udph->source;
         conn->udp.dport = udph->dest;
         conn->timeout =
             htonll(ktime_add_sec(ktime_get_real(), default_timeout_udp));
         break;
     case IPPROTO_ICMP:
-        struct icmphdr *icmph = (void *)iph + iph->ihl * 4;
+        icmph = (void *)iph + iph->ihl * 4;
         conn->icmp.type = icmph->type;
         conn->icmp.code = icmph->code;
         conn->timeout = htonll(ktime_add_sec(ktime_get_real(), default_timeout_icmp));
@@ -226,6 +229,7 @@ struct tinywall_conn *tinywall_connection_create(struct iphdr *iph)
         conn->timeout =
             conn->timeout = htonll(ktime_add_sec(ktime_get_real(), default_timeout_others));
     }
+    return NULL;
 }
 
 // hash lookup function
@@ -347,8 +351,45 @@ static void tinywall_conntable_destroy(void)
 }
 
 /* >----------------------------------日志部分----------------------------------<*/
-struct tinywall_log *tinywall_log_create(struct sk_buff *skb, struct iphdr *iph, bool is_new){
-    
+//
+struct tinywall_log *tinywall_log_create(struct sk_buff *skb, unsigned int action)
+{
+    struct iphdr *iph = ip_hdr(skb);
+    struct tcphdr *tcph = NULL;
+    struct udphdr *udph = NULL;
+    struct icmphdr *icmph = NULL;
+    struct tinywall_log *log = kvzalloc(sizeof(*log), GFP_KERNEL);
+    if (!log)
+        return NULL;
+
+    log->ts = htonll(ktime_get_real());
+    log->saddr = iph->saddr;
+    log->daddr = iph->daddr;
+    log->protocol = iph->protocol;
+    log->len = iph->tot_len;
+    log->action = htonl(action);
+    switch (iph->protocol)
+    {
+    case IPPROTO_TCP:
+        tcph = (void *)iph + iph->ihl * 4;
+        log->tcp.sport = tcph->source;
+        log->tcp.dport = tcph->dest;
+        break;
+    case IPPROTO_UDP:
+        udph = (void *)iph + iph->ihl * 4;
+        log->udp.sport = udph->source;
+        log->udp.dport = udph->dest;
+        break;
+    case IPPROTO_ICMP:
+        icmph = (void *)iph + iph->ihl * 4;
+        log->icmp.type = icmph->type;
+        log->icmp.code = icmph->code;
+        break;
+    default:
+        break;
+    }
+
+    return log;
 }
 
 /* >----------------------------------子模块部分----------------------------------<*/
@@ -357,6 +398,7 @@ static unsigned int firewall_hook(void *priv,
                                   const struct nf_hook_state *state)
 {
     bool new_conn = false;
+    int res = 0;
     unsigned int action = default_action;
     struct iphdr *iph = ip_hdr(skb);
     struct tinywall_conn *conn = tinywall_connection_create(iph);
@@ -369,11 +411,20 @@ static unsigned int firewall_hook(void *priv,
     {
         printk(KERN_INFO MODULE_NAME ": Connection exists, ACCEPT.\n");
         action = NF_ACCEPT;
-        if(default_logging){
-            log = tinywall_log_create(conn, iph, true);
-
+        if (default_logging)
+        {
+            log = tinywall_log_create(skb, NF_ACCEPT);
         }
+        goto out;
     }
+
+    // 没匹配到现有连接
+out:
+    if (!new_conn)
+    {
+        kfree(conn);
+    }
+    return res;
 }
 // struct iphdr *ip_header;
 // struct tcphdr *tcp_header;
@@ -457,7 +508,6 @@ static unsigned int firewall_hook(void *priv,
 // }
 // // 默认通过
 // return NF_ACCEPT;
-
 
 // 定义Netfilter钩子
 static struct nf_hook_ops firewall_nfho = {
