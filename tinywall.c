@@ -424,10 +424,50 @@ static void tinywall_conntable_destroy(void)
     // 重置连接计数
     conn_table.conn_count = 0;
 }
+
+void tinywall_conn_table_clean_by_timer(struct tinywall_conn_table *table)
+{
+    int i = 0;
+    struct hlist_node *tmp;
+    struct tinywall_conn *conn;
+    tinywall_PR_INFO("Clean the connection table by timer");
+    write_lock(&table->lock);
+    hlist_for_each_entry_safe(conn, tmp, &table->table[i], node)
+    {
+        struct in_addr src_ip, dst_ip;
+        src_ip.s_addr = conn->saddr;
+        dst_ip.s_addr = conn->daddr;
+        if (!ktime_before(ktime_get_real(), ntohll(conn->timeout))) // 当前时间大于后面的conn->timeout,说明超时
+        {
+            switch (conn->protocol)
+            {
+            case IPPROTO_TCP:
+                tinywall_PR_INFO("Delete connection: [TCP] %pI4,%d > %pI4,%d",
+                                 &src_ip, ntohs(conn->tcp.sport),
+                                 &dst_ip, ntohs(conn->tcp.dport));
+                break;
+            case IPPROTO_UDP:
+                tinywall_PR_INFO("Delete connection: [UDP] %pI4,%d > %pI4,%d",
+                                 &src_ip, ntohs(conn->udp.sport),
+                                 &dst_ip, ntohs(conn->udp.dport));
+                break;
+            case IPPROTO_ICMP:
+                tinywall_PR_INFO("Delete connection: [ICMP] %pI4 > %pI4",
+                                 &src_ip, &dst_ip);
+                break;
+            default:
+                break;
+            }
+            hash_del(&conn->node);
+            kfree(conn);
+            table->conn_count--;
+        }
+    }
+}
 void tinywall_timer_callback(struct timer_list *t)
 {
     tinywall_PR_INFO("Clean the connection table...");
-    tinywall_hashtable_clean(conn_table);
+    tinywall_conn_table_clean_by_timer(&conn_table);
     conn_timer.expires = jiffies + tinywall_CLEAN_CONN_INVERVAL_SEC * HZ;
     add_timer(&conn_timer);
 }
@@ -706,6 +746,8 @@ static int __init firewall_init(void)
 
     printk(KERN_INFO MODULE_NAME ": Firewall module loaded.\n");
     timer_setup(&conn_timer, tinywall_timer_callback, 0);
+    conn_timer.expires = jiffies + HZ * 10;
+    add_timer(&conn_timer);
     return 0;
 }
 
