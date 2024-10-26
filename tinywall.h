@@ -8,6 +8,9 @@
 #include <linux/netfilter_ipv4.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
+#include<linux/udp.h>
+#include <linux/icmp.h>
+#include <linux/skbuff.h>
 #include <linux/list.h>
 #include <linux/hashtable.h>
 #include "public.h"
@@ -86,6 +89,8 @@ void tinywall_rules_list(void);
 void tinywall_rules_clear(void);
 
 firewall_rule* tinywall_rule_get(int num);
+
+struct tinywall_conn *tinywall_connection_create(struct iphdr *iph);
 
 // hash函数
 static inline size_t tinywall_hash(struct tinywall_conn *conn)

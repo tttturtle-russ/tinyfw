@@ -1,14 +1,19 @@
 // tinywall.c
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/netfilter.h>
-#include <linux/netfilter_ipv4.h>
-#include <linux/ip.h>
-#include <linux/tcp.h>
-#include <linux/udp.h>
-#include <linux/types.h>
 #include "tinywall.h"
+static int default_timeout_tcp = 300;
+static int default_timeout_udp = 180;
+static int default_timeout_icmp = 100;
+static int default_timeout_others = 100;
 
+#ifdef __BIG_ENDIAN__
+#define htonll(x) (x)
+#define ntohll(x) (x)
+#else
+#define htonll(x) (((__u64)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
+#define ntohll(x) (((__u64)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32))
+#endif
+
+#define ktime_add_sec(kt, sval) (ktime_add_ns((kt), (sval) * NSEC_PER_SEC))
 // 初始化规则链表和锁
 static struct tinywall_rule_table rule_table;
 // 初始化连接表
@@ -183,6 +188,42 @@ void tinywall_conn_table_init(void)
     rwlock_init(&conn_table.lock);
     conn_table.conn_count = 0;
     return;
+}
+
+struct tinywall_conn *tinywall_connection_create(struct iphdr *iph)
+{
+    struct tinywall_conn *conn = kmalloc(sizeof(*conn), GFP_KERNEL);
+    if (!conn)
+        return NULL;
+    conn->saddr = iph->saddr;
+    conn->daddr = iph->daddr;
+    conn->protocol = iph->protocol;
+    switch (iph->protocol)
+    {
+    case IPPROTO_TCP:
+        struct tcphdr *tcph = (void *)iph + iph->ihl * 4;
+        conn->tcp.sport = tcph->source;
+        conn->tcp.dport = tcph->dest;
+        conn->timeout =
+            htonll(ktime_add_sec(ktime_get_real(), default_timeout_tcp));
+        break;
+    case IPPROTO_UDP:
+        struct udphdr *udph = (void *)iph + iph->ihl * 4;
+        conn->udp.sport = udph->source;
+        conn->udp.dport = udph->dest;
+        conn->timeout =
+            htonll(ktime_add_sec(ktime_get_real(), default_timeout_udp));
+        break;
+    case IPPROTO_ICMP:
+        struct icmphdr *icmph = (void *)iph + iph->ihl * 4;
+        conn->icmp.type = icmph->type;
+        conn->icmp.code = icmph->code;
+        conn->timeout = htonll(ktime_add_sec(ktime_get_real(), default_timeout_icmp));
+        break;
+    default:
+        conn->timeout =
+            conn->timeout = htonll(ktime_add_sec(ktime_get_real(), default_timeout_others));
+    }
 }
 
 // hash lookup function

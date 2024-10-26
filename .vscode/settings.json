@@ -14,7 +14,9 @@
         "rtnetlink.h": "c",
         "types.h": "c",
         "hashtable.h": "c",
-        "typeinfo": "c"
+        "typeinfo": "c",
+        "icmp.h": "c",
+        "udp.h": "c"
     },
     "C_Cpp.errorSquiggles": "enabled"
 }
