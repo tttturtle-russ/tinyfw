@@ -8,8 +8,10 @@
 #define htonll(x) (((__u64)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
 #define ntohll(x) (((__u64)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32))
 #endif
-#define XWALL_PR_INFO(...) pr_info(__VA_ARGS__)
+#define tinywall_PR_INFO(...) pr_info(__VA_ARGS__)
 #define ktime_add_sec(kt, sval) (ktime_add_ns((kt), (sval) * NSEC_PER_SEC))
+
+static unsigned int tinywall_CLEAN_CONN_INVERVAL_SEC = 10;
 static int default_timeout_tcp = 300;
 static int default_timeout_udp = 180;
 static int default_timeout_icmp = 100;
@@ -22,6 +24,8 @@ static struct tinywall_rule_table rule_table;
 struct tinywall_conn_table conn_table;
 // 初始化日志表
 struct tinywall_logtable log_table;
+// 连接超时定时器表
+static struct timer_list conn_timer;
 
 /* >----------------------------------规则表部分----------------------------------<*/
 // RULE TABLE INIT FUNCTION
@@ -387,7 +391,6 @@ bool tinywall_conn_match(struct tinywall_conn *conn, bool is_reverse)
     return false;
 }
 
-
 // 销毁连接表
 static void tinywall_conntable_destroy(void)
 {
@@ -420,6 +423,13 @@ static void tinywall_conntable_destroy(void)
 
     // 重置连接计数
     conn_table.conn_count = 0;
+}
+void tinywall_timer_callback(struct timer_list *t)
+{
+    tinywall_PR_INFO("Clean the connection table...");
+    tinywall_hashtable_clean(conn_table);
+    conn_timer.expires = jiffies + tinywall_CLEAN_CONN_INVERVAL_SEC * HZ;
+    add_timer(&conn_timer);
 }
 
 /* >----------------------------------日志部分----------------------------------<*/
@@ -545,32 +555,39 @@ static unsigned int firewall_hook(void *priv,
 
     // 开始匹配rule_table的各个entry
     rule = tinywall_rule_match(conn);
-    if(rule){
+    if (rule)
+    {
         res = ntohl(rule->action);
-        if(rule->logging){
+        if (rule->logging)
+        {
             log = tinywall_log_create(skb, ntohl(rule->action));
             tinywall_log_add(log);
         }
         printk(KERN_INFO MODULE_NAME ": Rule matched, action: %d\n", res);
-        if(res == NF_ACCEPT){
+        if (res == NF_ACCEPT)
+        {
             new_conn = true;
             tinywall_conn_add(conn);
             printk(KERN_INFO MODULE_NAME ": New connection added.\n");
-        }else{
+        }
+        else
+        {
             res = default_action;
-            if(default_logging){
+            if (default_logging)
+            {
                 log = tinywall_log_create(skb, default_action);
                 tinywall_log_add(log);
             }
             printk(KERN_INFO MODULE_NAME ": No match rules,use the default action.\n");
-            if(res == NF_ACCEPT){
+            if (res == NF_ACCEPT)
+            {
                 new_conn = true;
                 tinywall_conn_add(conn);
                 printk(KERN_INFO MODULE_NAME ": New connection added.\n");
             }
         }
     }
-    
+
 out:
     if (!new_conn)
     {
@@ -665,7 +682,7 @@ out:
 static struct nf_hook_ops firewall_nfho = {
     .hook = firewall_hook,
     .pf = PF_INET,
-    .hooknum = NF_INET_PRE_ROUTING,
+    .hooknum = NF_INET_FORWARD,
     .priority = NF_IP_PRI_FIRST,
 };
 
@@ -677,6 +694,8 @@ static int __init firewall_init(void)
     tinywall_rule_table_init();
     // 初始化连接表
     tinywall_conn_table_init();
+    // 初始化日志表
+    tinywall_log_table_init();
     // 注册Netfilter钩子
     ret = nf_register_net_hook(&init_net, &firewall_nfho);
     if (ret)
@@ -686,6 +705,7 @@ static int __init firewall_init(void)
     }
 
     printk(KERN_INFO MODULE_NAME ": Firewall module loaded.\n");
+    timer_setup(&conn_timer, tinywall_timer_callback, 0);
     return 0;
 }
 
