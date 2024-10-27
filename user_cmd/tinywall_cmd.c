@@ -207,12 +207,35 @@ void rules_store(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_add
             break;
     }
 }
+void load_kernel_modules() {
+    // 加载 tinywall.ko 和 tinywall_nl.ko
+    if (system("sudo insmod tinywall.ko") != 0) {
+        perror("Failed to load tinywall.ko");
+        exit(1);
+    }
+    if (system("sudo insmod tinywall_nl.ko") != 0) {
+        perror("Failed to load tinywall_nl.ko");
+        exit(1);
+    }
+}
+
+void unload_kernel_modules(){
+    // 卸载 tinywall.ko 和 tinywall_nl.ko
+    if (system("sudo rmmod tinywall_nl.ko") != 0) {
+        perror("Failed to unload tinywall.ko");
+        exit(1);
+    }
+    if (system("sudo insmod tinywall.ko") != 0) {
+        perror("Failed to unload tinywall_nl.ko");
+        exit(1);
+    }
+}
 int main()
 {
     struct sockaddr_nl src_addr, dest_addr;
     struct nlmsghdr *nlh = NULL;
     int sock_fd;
-
+    load_kernel_modules();
     memset(&src_addr, 0, sizeof(src_addr));
     src_addr.nl_family = AF_NETLINK;
     src_addr.nl_pid = getpid();
@@ -293,5 +316,6 @@ int main()
 exit:
     close(sock_fd);
     free(nlh);
+    unload_kernel_modules();
     return 0;
 }
