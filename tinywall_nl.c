@@ -7,6 +7,7 @@
 
 struct sock *nl_sk = NULL;
 extern struct tinywall_rule_table rule_table;
+extern struct tinywall_log_table log_table;
 static void nl_recv_msg(struct sk_buff *skb);
 static void nl_send_msg(tinywall_rule *rule, int pid,int rule_num);
 

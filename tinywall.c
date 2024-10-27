@@ -392,7 +392,7 @@ bool tinywall_conn_match(struct tinywall_conn *conn, bool is_reverse)
 }
 
 // 销毁连接表
-static void tinywall_conntable_destroy(void)
+static void tinywall_conn_table_destroy(void)
 {
     int i;
     struct tinywall_conn *conn;
@@ -413,16 +413,18 @@ static void tinywall_conntable_destroy(void)
             kfree(conn);
         }
     }
-
     // 释放哈希表本身（如果它是动态分配的）
     // 注意：这里假设哈希表是静态分配的，不需要释放
     // 如果是动态分配的，可以使用 kfree(table->table);
-
-    // 释放读写锁
-    write_unlock(&conn_table.lock);
-
     // 重置连接计数
     conn_table.conn_count = 0;
+    // INIT_LIST_HEAD(&conn_table->table);
+    for (i = 0; i < HASH_SIZE; i++)
+    {
+        INIT_HLIST_HEAD(&conn_table.table[i]);
+    }
+    // 释放读写锁
+    write_unlock(&conn_table.lock);
 }
 
 void tinywall_conn_table_clean_by_timer(struct tinywall_conn_table *table)
@@ -464,7 +466,6 @@ void tinywall_conn_table_clean_by_timer(struct tinywall_conn_table *table)
         }
     }
     write_unlock(&table->lock);
-    
 }
 void tinywall_timer_callback(struct timer_list *t)
 {
@@ -538,6 +539,21 @@ void tinywall_log_add(struct tinywall_log *log)
 
 // TODO: 读取日志
 void tinywall_log_read(void);
+
+// 销毁日志表
+void tinywall_log_table_destroy(void)
+{
+    struct tinywall_log *log, *tmp;
+    mutex_lock(&log_table.lock);
+    list_for_each_entry_safe(log, tmp, &log_table.head, node)
+    {
+        list_del(&log->node);
+        kfree(log);
+    }
+    log_table.log_num = 0;
+    INIT_LIST_HEAD(&log_table.head);
+    mutex_unlock(&log_table.lock);
+}
 /* >----------------------------------子模块部分----------------------------------<*/
 static unsigned int firewall_hook(void *priv,
                                   struct sk_buff *skb,
@@ -758,10 +774,20 @@ static void __exit firewall_exit(void)
 {
     // 注销Netfilter钩子
     nf_unregister_net_hook(&init_net, &firewall_nfho);
+    printk(KERN_INFO MODULE_NAME ": Netfilter hook unregistered.\n");
+    // 销毁定时器
+    del_timer(&conn_timer);
+    printk(KERN_INFO MODULE_NAME ": Timer destroyed.\n");
+    // 销毁连接表
+    tinywall_conn_table_destroy();
+    printk(KERN_INFO MODULE_NAME ": Connection table destroyed.\n");
     // 销毁规则表
     tinywall_rule_table_destroy();
-    //  销毁连接表
-    tinywall_conntable_destroy();
+    printk(KERN_INFO MODULE_NAME ": Rule table destroyed.\n");
+    // 销毁日志表
+    tinywall_log_table_destroy();
+    printk(KERN_INFO MODULE_NAME ": Log table destroyed.\n");
+
     printk(KERN_INFO MODULE_NAME ": Firewall module unloaded.\n");
 }
 
