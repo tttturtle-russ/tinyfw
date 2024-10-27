@@ -463,6 +463,8 @@ void tinywall_conn_table_clean_by_timer(struct tinywall_conn_table *table)
             table->conn_count--;
         }
     }
+    write_unlock(&table->lock);
+    
 }
 void tinywall_timer_callback(struct timer_list *t)
 {
