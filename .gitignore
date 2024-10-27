@@ -22,3 +22,4 @@ tinywall.mod
 tinywall.mod.c
 tinywall.mod.o
 tinywall.o
+rule_table.txt
