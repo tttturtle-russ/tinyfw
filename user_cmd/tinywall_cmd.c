@@ -222,11 +222,11 @@ void load_kernel_modules() {
 void unload_kernel_modules(){
     // 卸载 tinywall.ko 和 tinywall_nl.ko
     if (system("sudo rmmod tinywall_nl.ko") != 0) {
-        perror("Failed to unload tinywall.ko");
+        perror("Failed to unload tinywall_nl.ko");
         exit(1);
     }
-    if (system("sudo insmod tinywall.ko") != 0) {
-        perror("Failed to unload tinywall_nl.ko");
+    if (system("sudo rmmod tinywall.ko") != 0) {
+        perror("Failed to unload tinywall.ko");
         exit(1);
     }
 }
