@@ -9,7 +9,7 @@ struct sock *nl_sk = NULL;
 extern struct tinywall_rule_table rule_table;
 extern struct tinywall_log_table log_table;
 static void nl_recv_msg(struct sk_buff *skb);
-static void nl_send_msg(tinywall_rule *rule, int pid,int rule_num);
+static void nl_send_msg(tinywall_rule *rule, int pid, int rule_num);
 
 /* >----------------------------------内核处理输入部分----------------------------------<*/
 static void nl_recv_msg(struct sk_buff *skb)
@@ -72,14 +72,22 @@ static void nl_recv_msg(struct sk_buff *skb)
     else if (nlh->nlmsg_type == TINYWALL_TYPE_STORE_RULES)
     {
         int num = rule_table.rule_count;
-        int i = 0;
         int upid = nlh->nlmsg_pid;
+        tinywall_rule *tmp = NULL;
         printk(KERN_INFO MODULE_NAME ": Received a request to store rules.\n");
-        for (i; i < num; i++)
+        read_lock(&rule_table.lock);
+        list_for_each_entry(tmp, &rule_table.head, list)
         {
-            tinywall_rule *tmp = tinywall_rule_get(i);
-            nl_send_msg(tmp, upid, num);
+            if (tmp != NULL)
+                nl_send_msg(tmp, upid, num);
         }
+        read_unlock(&rule_table.lock);
+        printk(KERN_INFO MODULE_NAME ": Finish sending all rules.\n");
+    }
+    else if (nlh->nlmsg_type == TINYWALL_TYPE_LOG_SHOW)
+    {
+        printk(KERN_INFO MODULE_NAME ": Received a request to show logs.\n");
+        tinywall_log_show();
     }
     else
     {
@@ -88,7 +96,7 @@ static void nl_recv_msg(struct sk_buff *skb)
 }
 
 /* >----------------------------------内核发送部分----------------------------------<*/
-static void nl_send_msg(tinywall_rule *rule, int pid,int rule_num)
+static void nl_send_msg(tinywall_rule *rule, int pid, int rule_num)
 {
     struct sk_buff *skb_out;
     struct nlmsghdr *nlh;
@@ -107,8 +115,8 @@ static void nl_send_msg(tinywall_rule *rule, int pid,int rule_num)
     }
 
     nlh = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, 0);
-    
-    //用nlmsg_flags表示规则数量
+
+    // 用nlmsg_flags表示规则数量
     nlh->nlmsg_flags = rule_num;
     msg = (char *)NLMSG_DATA(nlh);
 

@@ -89,7 +89,7 @@ int tinywall_rule_add(tinywall_rule *new_rule)
     rule->logging = new_rule->logging;
     printk("tinywall_rule_add");
     write_lock(&rule_table.lock);
-    list_add(&rule->list, &rule_table.head);
+    list_add_tail(&rule->list, &rule_table.head);
     rule_table.rule_count++;
     write_unlock(&rule_table.lock);
 
@@ -195,21 +195,6 @@ void tinywall_rule_table_destroy(void)
         kfree(rule);
     }
     write_unlock(&rule_table.lock);
-}
-struct tinywall_rule *tinywall_rule_get(int num)
-{
-    struct tinywall_rule *rule;
-    int i = 0;
-
-    read_lock(&rule_table.lock);
-    list_for_each_entry(rule, &rule_table.head, list)
-    {
-        if (i == num)
-            return rule;
-        i++;
-    }
-    read_unlock(&rule_table.lock);
-    return NULL;
 }
 
 // 查找是否存在这个rule
@@ -537,8 +522,51 @@ void tinywall_log_add(struct tinywall_log *log)
     mutex_unlock(&log_table.lock);
 }
 
-// TODO: 读取日志
-void tinywall_log_read(void);
+// 日志展示
+
+void tinywall_log_show(void) {
+    struct tinywall_log *log;
+    struct file *file;
+    mm_segment_t oldfs;
+    char buffer[256]; // 用于存储日志信息的缓冲区
+
+    // 打开文件，使用 O_WRONLY | O_CREAT | O_APPEND 选项
+    file = filp_open("./log.txt", O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (IS_ERR(file)) {
+        printk(KERN_ERR "Failed to open log.txt\n");
+        return;
+    }
+
+    // 锁定日志表
+    list_for_each_entry(log, &log_table.head, node) {
+    // 格式化基本日志信息到缓冲区
+    snprintf(buffer, sizeof(buffer), "Index: %u, Timestamp: %llu, Source: %u, Destination: %u, Protocol: %u\n",
+             ntohl(log->idx), (unsigned long long)ntohll(log->ts),
+             ntohl(log->saddr), ntohl(log->daddr), log->protocol);
+    
+    // 根据协议类型添加详细信息
+    if (log->protocol == IPPROTO_TCP) {
+        snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), 
+                 "TCP - Source Port: %u, Destination Port: %u, State: %u\n",
+                 ntohs(log->tcp.sport), ntohs(log->tcp.dport), log->tcp.state);
+    } else if (log->protocol == IPPROTO_UDP) {
+        snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), 
+                 "UDP - Source Port: %u, Destination Port: %u\n",
+                 ntohs(log->udp.sport), ntohs(log->udp.dport));
+    } else if (log->protocol == IPPROTO_ICMP) {
+        snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), 
+                 "ICMP - Type: %u, Code: %u\n",
+                 log->icmp.type, log->icmp.code);
+    }
+
+    // 将缓冲区内容写入文件
+    vfs_write(file, buffer, strlen(buffer), &file->f_pos);
+}
+    mutex_unlock(&log_table.lock);
+
+    // 关闭文件
+    filp_close(file, NULL);
+}
 
 // 销毁日志表
 void tinywall_log_table_destroy(void)
@@ -798,7 +826,7 @@ EXPORT_SYMBOL(tinywall_rules_list);
 EXPORT_SYMBOL(tinywall_rule_remove);
 EXPORT_SYMBOL(tinywall_rule_add);
 EXPORT_SYMBOL(tinywall_rules_clear);
-EXPORT_SYMBOL(tinywall_rule_get);
+EXPORT_SYMBOL(tinywall_log_show);
 EXPORT_SYMBOL(rule_table);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Sun Xiaokai suxiaokai34@gmail.com");

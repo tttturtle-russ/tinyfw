@@ -13,6 +13,8 @@
 #include <linux/skbuff.h>
 #include <linux/list.h>
 #include <linux/hashtable.h>
+#include <linux/fs.h> // 包含文件操作相关的头文件
+#include <linux/uaccess.h> // 包含用户空间访问相关的头文件
 #include "public.h"
 
 #define MODULE_NAME "tinywall"
@@ -125,8 +127,6 @@ int tinywall_rule_remove(unsigned int rule_id);
 void tinywall_rules_list(void);
 
 void tinywall_rules_clear(void);
-
-tinywall_rule *tinywall_rule_get(int num);
 
 struct tinywall_conn *tinywall_connection_create(struct iphdr *iph);
 

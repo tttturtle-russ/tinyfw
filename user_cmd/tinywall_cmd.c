@@ -14,7 +14,7 @@
 
 /* >----------------------------------rule operations----------------------------------<*/
 // 增加规则
-void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr, struct tinywall_rule_user *rule)
+int rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr, struct tinywall_rule_user *rule)
 {
     nlh->nlmsg_type = TINYWALL_TYPE_ADD_RULE;
     nlh->nlmsg_flags = NLM_F_REQUEST;
@@ -32,10 +32,11 @@ void rule_add(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr, 
     if (sendmsg(sock_fd, &msg, 0) < 0)
     {
         perror("sendmsg");
-        exit(1);
+        return -2;
     }
 
     printf("Rule added successfully.\n");
+    return 0;
 }
 
 // 移除规则
@@ -73,13 +74,14 @@ void rules_clear(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_add
 }
 
 // 从文件中读取规则并添加
-void load_rules_from_file(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr, const char *filename)
+int load_rules_from_file(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr, const char *filename)
 {
+    int ret = 0;
     FILE *file = fopen(filename, "r");
     if (!file)
     {
         perror("fopen");
-        exit(1);
+        return -1;
     }
     printf("Reading rules from %s\n", filename);
     char line[256];
@@ -125,11 +127,16 @@ void load_rules_from_file(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl 
         printf("src_ip: %s\n", inet_ntoa(*(struct in_addr *)&rule.src_ip));
         printf("port rage: %hu->%hu  %hu->%hu\n", ntohs(rule.src_port_min), ntohs(rule.src_port_max), ntohs(rule.dst_port_min), ntohs(rule.dst_port_max));
         printf("protocol: %hu action: %hu\n", rule.protocol, rule.action);
-
-        rule_add(sock_fd, nlh, dest_addr, &rule);
+        ret = rule_add(sock_fd, nlh, dest_addr, &rule);
+        if (ret == -2)
+        {
+            printf("Error adding rule\n");
+            return ret;
+        }
     }
 
     fclose(file);
+    return ret;
 }
 
 // 将规则表保存为文件
@@ -207,6 +214,15 @@ void rules_store(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_add
             break;
     }
 }
+
+void log_show(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_addr)
+{
+    nlh->nlmsg_type = TINYWALL_TYPE_LOG_SHOW;
+    struct iovec iov = {.iov_base = (void *)nlh, .iov_len = nlh->nlmsg_len};
+    struct msghdr msg = {.msg_name = (void *)dest_addr, .msg_namelen = sizeof(*dest_addr), .msg_iov = &iov, .msg_iovlen = 1};
+    sendmsg(sock_fd, &msg, 0);
+}
+
 void load_kernel_modules()
 {
     // 加载 tinywall.ko 和 tinywall_nl.ko
@@ -241,6 +257,7 @@ int main()
     struct sockaddr_nl src_addr, dest_addr;
     struct nlmsghdr *nlh = NULL;
     int sock_fd;
+    int ret = 0;
     load_kernel_modules();
     memset(&src_addr, 0, sizeof(src_addr));
     src_addr.nl_family = AF_NETLINK;
@@ -285,6 +302,7 @@ int main()
         printf("3. List Rules\n");
         printf("4. Clear Rules\n");
         printf("5. Store Rules\n");
+        printf("6. Show logs\n");
         printf("Choose an option: ");
 
         int choice = 0;
@@ -293,11 +311,23 @@ int main()
 
         switch (choice)
         {
+        case 0:
+            goto exit;
         case 1:
             printf("Enter rule filename:\n");
             char filename[256];
             scanf("%s", filename);
-            load_rules_from_file(sock_fd, nlh, &dest_addr, filename);
+            ret = load_rules_from_file(sock_fd, nlh, &dest_addr, filename);
+            if (ret == -1)
+            {
+                printf("Error: file doesn't exist\n");
+                goto menu;
+            }
+            else if (ret == -2)
+            {
+                printf("Error: socket发送rule失败!");
+                goto exit;
+            }
             break;
         case 2:
             rule_remove(sock_fd, nlh, &dest_addr);
@@ -308,11 +338,11 @@ int main()
         case 4:
             rules_clear(sock_fd, nlh, &dest_addr);
             break;
-        case 0:
-            goto exit;
         case 5:
             rules_store(sock_fd, nlh, &dest_addr);
             break;
+        case 6:
+            log_show(sock_fd, nlh, &dest_addr);
         default:
             printf("Invalid choice. Please try again.\n");
             goto menu;
@@ -320,9 +350,8 @@ int main()
     }
 
 exit:
-    unload_kernel_modules();
     close(sock_fd);
     free(nlh);
-
+    unload_kernel_modules();
     return 0;
 }
