@@ -769,6 +769,7 @@ static struct nf_hook_ops firewall_nfho = {
     .hook = firewall_hook,
     .pf = PF_INET,
     .hooknum = NF_INET_FORWARD,
+    //.hooknum = NF_INET_PRE_ROUTING,
     .priority = NF_IP_PRI_FIRST,
 };
 
