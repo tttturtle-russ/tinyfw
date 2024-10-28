@@ -311,7 +311,7 @@ struct tinywall_conn *tinywall_conn_get_entry(struct tinywall_conn *conn)
 {
     if (!conn)
     {
-        printk(KERN_ERR MODULE_NAME ": conn is NULL\n");
+        // printk(KERN_ERR MODULE_NAME ": conn is NULL\n");
         return NULL;
     }
     read_lock(&conn_table.lock);
@@ -524,7 +524,8 @@ void tinywall_log_add(struct tinywall_log *log)
 
 // 日志展示
 
-void tinywall_log_show(void) {
+void tinywall_log_show(void)
+{
     struct tinywall_log *log;
     struct file *file;
     mm_segment_t oldfs;
@@ -532,36 +533,44 @@ void tinywall_log_show(void) {
 
     // 打开文件，使用 O_WRONLY | O_CREAT | O_APPEND 选项
     file = filp_open("./log.txt", O_WRONLY | O_CREAT | O_APPEND, 0644);
-    if (IS_ERR(file)) {
+    if (IS_ERR(file))
+    {
         printk(KERN_ERR "Failed to open log.txt\n");
         return;
     }
 
+    mutex_lock(&log_table.lock);
     // 锁定日志表
-    list_for_each_entry(log, &log_table.head, node) {
-    // 格式化基本日志信息到缓冲区
-    snprintf(buffer, sizeof(buffer), "Index: %u, Timestamp: %llu, Source: %u, Destination: %u, Protocol: %u\n",
-             ntohl(log->idx), (unsigned long long)ntohll(log->ts),
-             ntohl(log->saddr), ntohl(log->daddr), log->protocol);
-    
-    // 根据协议类型添加详细信息
-    if (log->protocol == IPPROTO_TCP) {
-        snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), 
-                 "TCP - Source Port: %u, Destination Port: %u, State: %u\n",
-                 ntohs(log->tcp.sport), ntohs(log->tcp.dport), log->tcp.state);
-    } else if (log->protocol == IPPROTO_UDP) {
-        snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), 
-                 "UDP - Source Port: %u, Destination Port: %u\n",
-                 ntohs(log->udp.sport), ntohs(log->udp.dport));
-    } else if (log->protocol == IPPROTO_ICMP) {
-        snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), 
-                 "ICMP - Type: %u, Code: %u\n",
-                 log->icmp.type, log->icmp.code);
-    }
+    list_for_each_entry(log, &log_table.head, node)
+    {
+        // 格式化基本日志信息到缓冲区
+        snprintf(buffer, sizeof(buffer), "Index: %u, Timestamp: %llu, Source: %u, Destination: %u, Protocol: %u\n",
+                 ntohl(log->idx), (unsigned long long)ntohll(log->ts),
+                 ntohl(log->saddr), ntohl(log->daddr), log->protocol);
 
-    // 将缓冲区内容写入文件
-    vfs_write(file, buffer, strlen(buffer), &file->f_pos);
-}
+        // 根据协议类型添加详细信息
+        if (log->protocol == IPPROTO_TCP)
+        {
+            snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer),
+                     "TCP - Source Port: %u, Destination Port: %u, State: %u\n",
+                     ntohs(log->tcp.sport), ntohs(log->tcp.dport), log->tcp.state);
+        }
+        else if (log->protocol == IPPROTO_UDP)
+        {
+            snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer),
+                     "UDP - Source Port: %u, Destination Port: %u\n",
+                     ntohs(log->udp.sport), ntohs(log->udp.dport));
+        }
+        else if (log->protocol == IPPROTO_ICMP)
+        {
+            snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer),
+                     "ICMP - Type: %u, Code: %u\n",
+                     log->icmp.type, log->icmp.code);
+        }
+
+        // 将缓冲区内容写入文件
+        vfs_write(file, buffer, strlen(buffer), &file->f_pos);
+    }
     mutex_unlock(&log_table.lock);
 
     // 关闭文件

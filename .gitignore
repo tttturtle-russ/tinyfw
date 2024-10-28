@@ -24,3 +24,4 @@ tinywall.mod.o
 tinywall.o
 rule_table.txt
 rules
+log.txt
