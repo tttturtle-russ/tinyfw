@@ -128,6 +128,8 @@ void tinywall_rules_list(void);
 
 void tinywall_rules_clear(void);
 
+void tinywall_log_show(void);
+
 struct tinywall_conn *tinywall_connection_create(struct iphdr *iph);
 
 struct tinywall_rule *tinywall_rule_match(struct tinywall_conn *conn);

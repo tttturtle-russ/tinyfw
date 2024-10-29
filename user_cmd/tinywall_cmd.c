@@ -343,6 +343,7 @@ int main()
             break;
         case 6:
             log_show(sock_fd, nlh, &dest_addr);
+            break;
         default:
             printf("Invalid choice. Please try again.\n");
             goto menu;
