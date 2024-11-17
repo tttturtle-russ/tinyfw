@@ -182,7 +182,7 @@ void rules_store(int sock_fd, struct nlmsghdr *nlh, struct sockaddr_nl *dest_add
                 tinywall_rule_user *rule = (tinywall_rule_user *)NLMSG_DATA(nlh);
 
                 // 打开文件
-                FILE *fp = fopen("rule_table.txt", "a");
+                FILE *fp = fopen("rules.txt", "a");
                 if (fp == NULL)
                 {
                     perror("fopen");
@@ -254,7 +254,7 @@ void unload_kernel_modules()
 }
 int main(int argc, char** argv)
 {
-    if (argc != 2)
+    if (argc < 2)
     {
         printf("Usage: %s [command]\n", argv[0]);
         exit(1);
@@ -327,7 +327,10 @@ int main(int argc, char** argv)
     }
     else if (!strcmp(argv[1], "store")){
         rules_store(sock_fd, nlh, &dest_addr);
-    }else {
+    }else if (!strcmp(argv[1], "log")){
+        log_show(sock_fd, nlh, &dest_addr);
+    }
+    else{
         printf("Invalid command\n");
         exit(1);
     }

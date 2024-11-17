@@ -27,3 +27,4 @@ rules
 log.txt
 gui/__pycache__
 .vscode
+rules.txt
