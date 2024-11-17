@@ -1,4 +1,4 @@
-tinywall
+fw
 .Module.symvers.cmd
 .modules.order.cmd
 .tinywall_nl.ko.cmd
@@ -25,3 +25,5 @@ tinywall.o
 rule_table.txt
 rules
 log.txt
+gui/__pycache__
+.vscode

@@ -252,8 +252,13 @@ void unload_kernel_modules()
         exit(1);
     }
 }
-int main()
+int main(int argc, char** argv)
 {
+    if (argc != 2)
+    {
+        printf("Usage: %s [command]\n", argv[0]);
+        exit(1);
+    }
     struct sockaddr_nl src_addr, dest_addr;
     struct nlmsghdr *nlh = NULL;
     int sock_fd;
@@ -293,62 +298,96 @@ int main()
     nlh->nlmsg_pid = getpid();
     nlh->nlmsg_flags = 0;
 
-    while (1)
-    {
-        printf("\nMenu:\n");
-        printf("0. EXIT\n");
-        printf("1. Load Rule\n");
-        printf("2. Remove Rule\n");
-        printf("3. List Rules\n");
-        printf("4. Clear Rules\n");
-        printf("5. Store Rules\n");
-        printf("6. Show logs\n");
-        printf("Choose an option: ");
-
-        int choice = 0;
-    menu:
-        scanf("%d", &choice);
-
-        switch (choice)
-        {
-        case 0:
-            goto exit;
-        case 1:
-            printf("Enter rule filename:\n");
-            char filename[256];
-            scanf("%s", filename);
-            ret = load_rules_from_file(sock_fd, nlh, &dest_addr, filename);
-            if (ret == -1)
+    if (!strcmp(argv[1],"load")){
+        if (argc != 3) {
+            printf("Usage: %s load <rule_file>\n", argv[0]);
+            exit(1);
+        }
+        char* file = argv[2];
+        ret = load_rules_from_file(sock_fd, nlh, &dest_addr, file);
+        if (ret == -1)
             {
                 printf("Error: file doesn't exist\n");
-                goto menu;
+                goto exit;
             }
             else if (ret == -2)
             {
                 printf("Error: socket发送rule失败!");
                 goto exit;
             }
-            break;
-        case 2:
-            rule_remove(sock_fd, nlh, &dest_addr);
-            break;
-        case 3:
-            rules_list(sock_fd, nlh, &dest_addr);
-            break;
-        case 4:
-            rules_clear(sock_fd, nlh, &dest_addr);
-            break;
-        case 5:
-            rules_store(sock_fd, nlh, &dest_addr);
-            break;
-        case 6:
-            log_show(sock_fd, nlh, &dest_addr);
-            break;
-        default:
-            printf("Invalid choice. Please try again.\n");
-            goto menu;
-        }
     }
+    else if (!strcmp(argv[1], "remove")){
+        rule_remove(sock_fd, nlh, &dest_addr);
+    }
+    else if (!strcmp(argv[1], "list")){
+        rules_list(sock_fd, nlh, &dest_addr);
+    }
+    else if (!strcmp(argv[1], "clear")){
+        rules_clear(sock_fd, nlh, &dest_addr);
+    }
+    else if (!strcmp(argv[1], "store")){
+        rules_store(sock_fd, nlh, &dest_addr);
+    }else {
+        printf("Invalid command\n");
+        exit(1);
+    }
+
+    // while (1)
+    // {
+    // menu:
+    //     printf("\nMenu:\n");
+    //     printf("0. EXIT\n");
+    //     printf("1. Load Rule\n");
+    //     printf("2. Remove Rule\n");
+    //     printf("3. List Rules\n");
+    //     printf("4. Clear Rules\n");
+    //     printf("5. Store Rules\n");
+    //     printf("6. Show logs\n");
+    //     printf("Choose an option: ");
+
+    //     int choice = 0;
+    //     scanf("%d", &choice);
+
+    //     switch (choice)
+    //     {
+    //     case 0:
+    //         goto exit;
+    //     case 1:
+    //         printf("Enter rule filename:\n");
+    //         char filename[256];
+    //         scanf("%s", filename);
+    //         ret = load_rules_from_file(sock_fd, nlh, &dest_addr, filename);
+    //         if (ret == -1)
+    //         {
+    //             printf("Error: file doesn't exist\n");
+    //             goto menu;
+    //         }
+    //         else if (ret == -2)
+    //         {
+    //             printf("Error: socket发送rule失败!");
+    //             goto exit;
+    //         }
+    //         break;
+    //     case 2:
+    //         rule_remove(sock_fd, nlh, &dest_addr);
+    //         break;
+    //     case 3:
+    //         rules_list(sock_fd, nlh, &dest_addr);
+    //         break;
+    //     case 4:
+    //         rules_clear(sock_fd, nlh, &dest_addr);
+    //         break;
+    //     case 5:
+    //         rules_store(sock_fd, nlh, &dest_addr);
+    //         break;
+    //     case 6:
+    //         log_show(sock_fd, nlh, &dest_addr);
+    //         break;
+    //     default:
+    //         printf("Invalid choice. Please try again.\n");
+    //         goto menu;
+    //     }
+    // }
 
 exit:
     close(sock_fd);

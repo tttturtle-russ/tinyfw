@@ -839,5 +839,5 @@ EXPORT_SYMBOL(tinywall_rules_clear);
 EXPORT_SYMBOL(tinywall_log_show);
 EXPORT_SYMBOL(rule_table);
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Sun Xiaokai suxiaokai34@gmail.com");
-MODULE_DESCRIPTION("A Tiny Netfilter Firewall Module");
+MODULE_AUTHOR("TurtleRuss tttturtleruss@gmail.com");
+MODULE_DESCRIPTION("Firewall Based on Netfilter");
