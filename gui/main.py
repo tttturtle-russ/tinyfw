@@ -30,7 +30,7 @@ class MainApplication:
         self.window.mainloop()
 
 if __name__ == '__main__':
-    app = MainApplication('Main Application')
+    app = MainApplication('Fire Wall Console')
     app.run()
 
     
