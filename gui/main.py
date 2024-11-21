@@ -6,7 +6,7 @@ class MainApplication:
     def __init__(self, window_name) -> None:
         self.window = tk.Tk()
         self.window.title(window_name)
-        self.window.focus()
+        self.window.focus_force()
         self.window.geometry('800x600')
         self.window.resizable(True, True)
 
